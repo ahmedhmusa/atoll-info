@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // NOTE: `base` must match your GitHub Pages repo name, e.g. https://<user>.github.io/<repo>/
 // If you deploy to a custom domain or to the root of github.io, change base to '/'.
-const REPO_BASE = '/atoll-dims/'
+const REPO_BASE = '/atoll-info/'
 
 export default defineConfig({
   base: REPO_BASE,
