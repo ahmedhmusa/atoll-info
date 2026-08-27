@@ -4,6 +4,8 @@ import { Plus, ChevronRight, X } from 'lucide-react';
 import { useStore, newRecord, touchRecord } from '../state/store';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
+import Avatar from '../components/Avatar';
+import PhotoField from '../components/PhotoField';
 import type { Person, PersonCategory } from '../types';
 
 const CATEGORIES: PersonCategory[] = ['Person of Interest', 'Suspected User', 'Suspected Dealer', 'Cleared'];
@@ -56,9 +58,12 @@ const Persons: React.FC = () => {
 
       {filtered.map((p) => (
         <div key={p.id} className="list-item" style={{ cursor: 'pointer' }} onClick={() => setSel(p)}>
-          <div className="li-main">
-            <div className="li-title">{p.alias ? `${p.name} "${p.alias}"` : p.name}</div>
-            <div className="li-sub">{islandName(p.islandId)}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+            <Avatar src={p.photoDataUrl} />
+            <div className="li-main">
+              <div className="li-title">{p.alias ? `${p.name} "${p.alias}"` : p.name}</div>
+              <div className="li-sub">{islandName(p.islandId)}</div>
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Badge text={p.category} kind={categoryKind(p.category) as any} />
@@ -70,9 +75,14 @@ const Persons: React.FC = () => {
 
       {sel && (
         <Modal title={sel.name} onClose={() => setSel(null)}>
-          <div className="section-sub" style={{ marginBottom: 10 }}>{islandName(sel.islandId)}</div>
-          <Badge text={sel.category} kind={categoryKind(sel.category) as any} />
-          <div style={{ marginTop: 14, fontSize: 14 }}>{sel.notes || 'No notes.'}</div>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14 }}>
+            <Avatar src={sel.photoDataUrl} size={72} />
+            <div>
+              <div className="section-sub" style={{ marginBottom: 6 }}>{islandName(sel.islandId)}</div>
+              <Badge text={sel.category} kind={categoryKind(sel.category) as any} />
+            </div>
+          </div>
+          <div style={{ fontSize: 14 }}>{sel.notes || 'No notes.'}</div>
           <div className="btn-row" style={{ marginTop: 16 }}>
             <button className="btn" onClick={() => { setEditing(sel); setSel(null); }}>Edit</button>
             <button className="btn btn-danger" onClick={() => { if (confirm(`Delete ${sel.name}?`)) { remove('persons', sel.id); setSel(null); } }}>Delete</button>
@@ -100,17 +110,19 @@ const PersonForm: React.FC<{ existing: Person | null; onClose: () => void; onSav
   const [islandId, setIslandId] = useState(existing?.islandId ?? data.islands[0]?.id ?? '');
   const [category, setCategory] = useState<PersonCategory>(existing?.category ?? 'Person of Interest');
   const [notes, setNotes] = useState(existing?.notes ?? '');
+  const [photoDataUrl, setPhotoDataUrl] = useState(existing?.photoDataUrl);
 
   const save = () => {
     if (!name.trim() || !islandId) return;
     const record: Person = existing
-      ? touchRecord({ ...existing, name, alias, islandId, category, notes })
-      : { ...newRecord(), name, alias, islandId, category, notes };
+      ? touchRecord({ ...existing, name, alias, islandId, category, notes, photoDataUrl })
+      : { ...newRecord(), name, alias, islandId, category, notes, photoDataUrl };
     onSave(record);
   };
 
   return (
     <Modal title={existing ? 'Edit Person' : 'New Person'} onClose={onClose}>
+      <PhotoField value={photoDataUrl} onChange={setPhotoDataUrl} />
       <div className="field"><label>Name *</label><input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></div>
       <div className="field"><label>Alias</label><input value={alias} onChange={(e) => setAlias(e.target.value)} /></div>
       <div className="field">

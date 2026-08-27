@@ -22,9 +22,11 @@ but you can add, rename, or remove islands freely.
   list from scratch. Each island still shows sellers and users counted and
   listed **separately**. Tap an island to see the actual names in each group.
 - **Persons** — name, alias, island, category (Person of Interest / Suspected
-  User / Suspected Dealer / Cleared), notes.
-- **Informants** — a confidential code name, island, reliability, notes.
-  Real identities are never asked for or shown — that's the point of a code name.
+  User / Suspected Dealer / Cleared), notes, and an optional **photo**.
+- **Informants** — a confidential code name, island, reliability, notes, and
+  an optional photo. Real identities are never asked for or shown by name —
+  that's the point of a code name (the app does warn that a photo can still
+  reveal identity, so use it per your own source-protection judgment).
 - **Reports** — title, island, date, confidence, description, open/closed status.
 - **Tasks** — title, due date, priority, done/open — addable from the
   Dashboard or the Tasks tab.
@@ -74,6 +76,10 @@ See `src/lib/backup.ts` for the file format and restore logic.
   `XMLHttpRequest` call anywhere in them.
 - No `localStorage`/`sessionStorage`, no analytics, no third-party scripts,
   no CDN dependency — everything is bundled into the app at build time.
+- Photos are resized client-side (canvas, capped around 480px) and stored
+  as part of the same encrypted record — never as separate unencrypted
+  files, and never uploaded anywhere. See `src/lib/util.ts`
+  (`fileToResizedDataUrl`) and `src/components/PhotoField.tsx`.
 - The PIN is never stored anywhere, only its PBKDF2-derived key material
   used transiently in memory. **If you forget your PIN, there is no way to
   recover the data** — that's the intended trade-off for not having a

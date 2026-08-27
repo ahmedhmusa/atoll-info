@@ -25,6 +25,7 @@ export interface Person extends AuditFields {
   islandId: ID;
   category: PersonCategory;
   notes?: string;
+  photoDataUrl?: string; // small, resized JPEG data URL — stored (and encrypted) inline with the record
 }
 
 export type Level = 'Low' | 'Medium' | 'High';
@@ -35,6 +36,7 @@ export interface Informant extends AuditFields {
   islandId: ID;
   reliability: Level;
   notes?: string;
+  photoDataUrl?: string; // optional — e.g. a covert reference photo, if the officer has one
 }
 
 export type ReportStatus = 'Open' | 'Closed';

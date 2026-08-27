@@ -3,6 +3,8 @@ import { Plus, ChevronRight } from 'lucide-react';
 import { useStore, newRecord, touchRecord } from '../state/store';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
+import Avatar from '../components/Avatar';
+import PhotoField from '../components/PhotoField';
 import type { Informant, Level } from '../types';
 
 const LEVELS: Level[] = ['Low', 'Medium', 'High'];
@@ -30,7 +32,10 @@ const Informants: React.FC = () => {
 
       {filtered.map((i) => (
         <div key={i.id} className="list-item" style={{ cursor: 'pointer' }} onClick={() => setSel(i)}>
-          <div className="li-main"><div className="li-title">{i.codeName}</div><div className="li-sub">{islandName(i.islandId)}</div></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+            <Avatar src={i.photoDataUrl} />
+            <div className="li-main"><div className="li-title">{i.codeName}</div><div className="li-sub">{islandName(i.islandId)}</div></div>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Badge text={`Reliability: ${i.reliability}`} kind={levelKind(i.reliability) as any} />
             <ChevronRight size={18} className="li-chevron" />
@@ -41,7 +46,10 @@ const Informants: React.FC = () => {
 
       {sel && (
         <Modal title={sel.codeName} onClose={() => setSel(null)}>
-          <div className="section-sub" style={{ marginBottom: 10 }}>{islandName(sel.islandId)} · Reliability: {sel.reliability}</div>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14 }}>
+            <Avatar src={sel.photoDataUrl} size={72} />
+            <div className="section-sub" style={{ margin: 0 }}>{islandName(sel.islandId)} · Reliability: {sel.reliability}</div>
+          </div>
           <div style={{ fontSize: 14 }}>{sel.notes || 'No notes.'}</div>
           <div className="btn-row" style={{ marginTop: 16 }}>
             <button className="btn" onClick={() => { setEditing(sel); setSel(null); }}>Edit</button>
@@ -69,17 +77,24 @@ const InformantForm: React.FC<{ existing: Informant | null; onClose: () => void;
   const [islandId, setIslandId] = useState(existing?.islandId ?? data.islands[0]?.id ?? '');
   const [reliability, setReliability] = useState<Level>(existing?.reliability ?? 'Medium');
   const [notes, setNotes] = useState(existing?.notes ?? '');
+  const [photoDataUrl, setPhotoDataUrl] = useState(existing?.photoDataUrl);
 
   const save = () => {
     if (!codeName.trim() || !islandId) return;
     const record: Informant = existing
-      ? touchRecord({ ...existing, codeName, islandId, reliability, notes })
-      : { ...newRecord(), codeName, islandId, reliability, notes };
+      ? touchRecord({ ...existing, codeName, islandId, reliability, notes, photoDataUrl })
+      : { ...newRecord(), codeName, islandId, reliability, notes, photoDataUrl };
     onSave(record);
   };
 
   return (
     <Modal title={existing ? 'Edit Informant' : 'New Informant'} onClose={onClose}>
+      <PhotoField value={photoDataUrl} onChange={setPhotoDataUrl} />
+      {photoDataUrl && (
+        <div className="field-hint" style={{ marginTop: -8, marginBottom: 14 }}>
+          A photo can reveal identity even with a code name on file — handle per your source-protection policy.
+        </div>
+      )}
       <div className="field"><label>Code name *</label><input value={codeName} onChange={(e) => setCodeName(e.target.value)} placeholder="e.g. BLUE-HERON" autoFocus /></div>
       <div className="field">
         <label>Island</label>
