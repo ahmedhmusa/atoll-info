@@ -17,7 +17,7 @@ export const Layout: React.FC = () => {
     <div className="app-shell">
       <header className="app-header">
         <div>
-          <h1>Tha Atoll DIMS</h1>
+          <h1>Atoll Info</h1>
           <div className="subtitle">{settings?.agencyLabel}</div>
         </div>
         <div className="header-actions">

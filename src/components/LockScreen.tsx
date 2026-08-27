@@ -63,7 +63,7 @@ export const LockScreen: React.FC = () => {
   return (
     <div className="lock-screen">
       <div className="lock-badge">🔒</div>
-      <div className="lock-title">Atoll DIMS Locked</div>
+      <div className="lock-title">Atoll Info Locked</div>
       <div className="lock-sub">Enter your PIN to unlock.</div>
       <form onSubmit={handleUnlockSubmit} style={{ width: '100%', maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
         <input className="pin-input" type="password" inputMode="numeric" autoFocus placeholder="PIN" value={pin} onChange={(e) => setPin(e.target.value)} />

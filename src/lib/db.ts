@@ -10,7 +10,7 @@
 import { openDB, type IDBPDatabase, type DBSchema } from 'idb';
 import type { CryptoConfigRecord, AppSettingsRecord } from '../types';
 
-export const DB_NAME = 'atoll-dims';
+export const DB_NAME = 'atoll-info';
 export const DB_VERSION = 1;
 
 export interface EncryptedRecord {
@@ -67,6 +67,14 @@ export async function deleteEncrypted(store: EncryptedStoreName, id: string): Pr
 export async function clearOperationalData(): Promise<void> {
   const db = await getDB();
   const stores: EncryptedStoreName[] = ['persons', 'informants', 'reports', 'tasks'];
+  const tx = db.transaction(stores, 'readwrite');
+  await Promise.all(stores.map((s) => tx.objectStore(s).clear()));
+  await tx.done;
+}
+
+export async function clearAllData(): Promise<void> {
+  const db = await getDB();
+  const stores: EncryptedStoreName[] = ['islands', 'persons', 'informants', 'reports', 'tasks'];
   const tx = db.transaction(stores, 'readwrite');
   await Promise.all(stores.map((s) => tx.objectStore(s).clear()));
   await tx.done;

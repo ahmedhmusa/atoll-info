@@ -1,4 +1,4 @@
-# Tha Atoll Drug Intelligence Management System (Atoll DIMS)
+# Atoll Info
 
 A simple, offline, encrypted Progressive Web App for a **single authorized
 officer** to track drug-intelligence casework across the 13 inhabited
@@ -22,12 +22,36 @@ everything stored **only on that device**.
 - **Reports** — title, island, date, confidence, description, open/closed status.
 - **Tasks** — title, due date, priority, done/open — addable from the
   Dashboard or the Tasks tab.
-- **Settings** — officer/agency name, auto-lock timeout, PIN change, and a
-  "wipe all data" reset.
+- **Settings** — officer/agency name, auto-lock timeout, PIN change,
+  **Backup & Restore**, and a "wipe all data" reset.
 
-That's it — no network module, no attachments, no backup file, no biometric
-login, no configurable grading systems. Those were cut on purpose to keep
-this small enough to actually use one-handed on a phone.
+That's it — no network module, no attachments, no biometric login, no
+configurable grading systems. Those were cut on purpose to keep this small
+enough to actually use one-handed on a phone.
+
+## Backup & Restore
+
+Since everything lives only in this device's storage, losing the phone or
+clearing site data means losing everything — so there's a local, encrypted
+backup feature in Settings:
+
+- **Export**: enter your PIN, and the app downloads a single encrypted
+  `.json` file containing persons, informants, reports, tasks, islands, and
+  settings. Save it wherever you control — Files, iCloud Drive, Google
+  Drive, a USB drive. It is never uploaded anywhere automatically.
+- **Restore**: pick a backup file and the app shows its date, app/database
+  version, and record counts — all readable without a password — plus an
+  integrity checksum check, before asking for the backup's password.
+  Two modes:
+  - **Merge** — only adds records that don't already exist (matched by ID;
+    islands are matched by name across devices). Never overwrites anything.
+  - **Full restore** — wipes this device and replaces everything with the
+    backup, including its PIN.
+- Both modes require typing the backup's password and an explicit
+  confirmation step before anything is written — nothing is ever
+  overwritten silently.
+
+See `src/lib/backup.ts` for the file format and restore logic.
 
 ## Where your data lives
 
@@ -51,10 +75,9 @@ this small enough to actually use one-handed on a phone.
 - The app auto-locks after a period of inactivity (configurable in
   Settings, default 5 minutes) and has a manual "🔒 Lock" button in the header.
 
-Because there's no backup/export feature in this version, uninstalling the
-app or clearing site data on your phone will permanently delete everything.
-If that's a problem for your workflow, say so and a backup/export feature
-can be added back in.
+Because there's no automatic cloud backup, uninstalling the app or
+clearing site data on your phone will permanently delete everything unless
+you've exported a backup first (see above).
 
 ## Tech stack
 
@@ -67,7 +90,7 @@ can be added back in.
 ## Project structure
 
 ```
-atoll-dims/
+atoll-info/
 ├── .github/workflows/deploy.yml   # CI: build + deploy to GitHub Pages
 ├── public/
 │   ├── manifest.webmanifest
@@ -78,9 +101,11 @@ atoll-dims/
 │   ├── lib/
 │   │   ├── crypto.ts              # PBKDF2 + AES-GCM
 │   │   ├── db.ts                  # IndexedDB, ciphertext-only stores
+│   │   ├── backup.ts              # Backup file format, checksum, replace/merge restore
+│   │   ├── appMeta.ts             # App/DB version constants (used in backup headers)
 │   │   ├── seed.ts                # the 13 islands
 │   │   └── util.ts
-│   ├── state/store.tsx            # PIN lock/unlock, auto-lock, encrypted CRUD
+│   ├── state/store.tsx            # PIN lock/unlock, auto-lock, encrypted CRUD, backup/restore
 │   ├── components/
 │   │   ├── LockScreen.tsx
 │   │   ├── Layout.tsx             # header + 6-tab bottom nav
@@ -93,7 +118,7 @@ atoll-dims/
 │   │   ├── Informants.tsx
 │   │   ├── Reports.tsx
 │   │   ├── Tasks.tsx
-│   │   └── Settings.tsx
+│   │   └── Settings.tsx           # incl. Backup & Restore
 │   └── styles/global.css          # light/dark via CSS variables + prefers-color-scheme
 ├── vite.config.ts
 └── package.json
@@ -116,13 +141,13 @@ npm run preview   # serve the production build locally
 ## Deploying to GitHub Pages (so you can install it on your phone)
 
 1. Create a new GitHub repository and push this project to it, e.g.
-   `github.com/<you>/atoll-dims`.
+   `github.com/<you>/atoll-info`.
 2. In the repo, go to **Settings → Pages** and set the source to
    **GitHub Actions**.
 3. Push to `main` — the included workflow
    (`.github/workflows/deploy.yml`) builds the app and deploys it
    automatically.
-4. **If your repository name isn't `atoll-dims`**, edit `REPO_BASE` in
+4. **If your repository name isn't `atoll-info`**, edit `REPO_BASE` in
    `vite.config.ts` to `/<your-repo-name>/` (and `start_url`/`scope` in
    `public/manifest.webmanifest` to match) before pushing.
 5. Once the Action finishes, open the Pages URL shown in the repo's
