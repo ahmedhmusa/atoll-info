@@ -1,9 +1,10 @@
 # Atoll Info
 
 A simple, offline, encrypted Progressive Web App for a **single authorized
-officer** to track drug-intelligence casework across the 13 inhabited
-islands of Tha Atoll — installable on an iPhone or Android phone, with
-everything stored **only on that device**.
+officer** to track drug-intelligence casework across the islands of Tha
+Atoll — installable on an iPhone or Android phone, with everything stored
+**only on that device**. Comes pre-loaded with the 13 inhabited islands,
+but you can add, rename, or remove islands freely.
 
 > FOR AUTHORIZED OFFICIAL USE ONLY. Categories like "Suspected Dealer" are
 > investigative leads, not findings of guilt.
@@ -12,8 +13,13 @@ everything stored **only on that device**.
 
 - **Dashboard** — suspected sellers vs. suspected users at a glance (split
   out, not lumped together), informant/report counts, recent reports, open
-  tasks, and a quick "+ Add Task" button right there.
-- **Islands** — all 13 islands, each showing sellers and users counted and
+  tasks, and a quick "+ Add Task" button right there. Every stat tile is
+  tappable — it shows a short description of what it represents and jumps
+  straight to the underlying records (e.g. tapping "Suspected Sellers"
+  opens Persons pre-filtered to that category).
+- **Islands** — add, rename, or delete islands yourself; a "Clear All
+  Islands" option if you want to wipe the starting set and build your own
+  list from scratch. Each island still shows sellers and users counted and
   listed **separately**. Tap an island to see the actual names in each group.
 - **Persons** — name, alias, island, category (Person of Interest / Suspected
   User / Suspected Dealer / Cleared), notes.
@@ -83,6 +89,7 @@ you've exported a backup first (see above).
 
 - React + TypeScript + Vite
 - `idb` (thin wrapper over IndexedDB)
+- `lucide-react` (SVG icon set — bundled at build time, no CDN)
 - `react-router-dom` (HashRouter — works on GitHub Pages with no server config)
 - Native Web Crypto API for encryption — no external crypto library
 - `vite-plugin-pwa` for the installable app + offline service worker

@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Plus, ChevronRight, X } from 'lucide-react';
 import { useStore, newRecord, touchRecord } from '../state/store';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
@@ -9,7 +11,9 @@ const categoryKind = (c: PersonCategory) => (c === 'Suspected Dealer' ? 'danger'
 
 const Persons: React.FC = () => {
   const { data, upsert, remove } = useStore();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [islandId, setIslandId] = useState('');
+  const [category, setCategory] = useState(searchParams.get('category') ?? '');
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<Person | null>(null);
   const [editing, setEditing] = useState<Person | 'new' | null>(null);
@@ -19,8 +23,11 @@ const Persons: React.FC = () => {
   const filtered = useMemo(() => {
     return data.persons
       .filter((p) => !islandId || p.islandId === islandId)
+      .filter((p) => !category || p.category === category)
       .filter((p) => !q.trim() || p.name.toLowerCase().includes(q.toLowerCase()) || (p.alias ?? '').toLowerCase().includes(q.toLowerCase()));
-  }, [data.persons, islandId, q]);
+  }, [data.persons, islandId, category, q]);
+
+  const clearCategoryFilter = () => { setCategory(''); setSearchParams({}); };
 
   return (
     <div style={{ position: 'relative', minHeight: '60vh' }}>
@@ -33,6 +40,19 @@ const Persons: React.FC = () => {
           {data.islands.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
         </select>
       </div>
+      <div className="field">
+        <select value={category} onChange={(e) => setCategory(e.target.value)}>
+          <option value="">All Categories</option>
+          {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+      {category && (
+        <div className="pill-row" style={{ marginBottom: 12 }}>
+          <button className="pill active" onClick={clearCategoryFilter} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            Showing: {category} <X size={12} />
+          </button>
+        </div>
+      )}
 
       {filtered.map((p) => (
         <div key={p.id} className="list-item" style={{ cursor: 'pointer' }} onClick={() => setSel(p)}>
@@ -40,7 +60,10 @@ const Persons: React.FC = () => {
             <div className="li-title">{p.alias ? `${p.name} "${p.alias}"` : p.name}</div>
             <div className="li-sub">{islandName(p.islandId)}</div>
           </div>
-          <Badge text={p.category} kind={categoryKind(p.category) as any} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Badge text={p.category} kind={categoryKind(p.category) as any} />
+            <ChevronRight size={18} className="li-chevron" />
+          </div>
         </div>
       ))}
       {filtered.length === 0 && <div className="empty-state">No persons match this filter — tap + to add one.</div>}
@@ -65,7 +88,7 @@ const Persons: React.FC = () => {
         />
       )}
 
-      <button className="fab" onClick={() => setEditing('new')} aria-label="Add person">+</button>
+      <button className="fab" onClick={() => setEditing('new')} aria-label="Add person"><Plus size={24} strokeWidth={2.5} /></button>
     </div>
   );
 };

@@ -30,6 +30,7 @@ interface StoreContextValue extends StoreState {
   remove: <K extends keyof EntityMap>(store: K, id: string) => Promise<void>;
   updateSettings: (patch: Partial<AppSettingsRecord>) => Promise<void>;
   wipeAllData: () => Promise<void>;
+  clearIslands: () => Promise<void>;
   exportBackup: (pin: string) => Promise<Blob>;
   inspectBackup: (file: File) => Promise<backupLib.InspectResult>;
   restoreFromBackup: (file: File, pin: string, mode: 'replace' | 'merge') => Promise<{ ok: boolean; message: string; summary?: backupLib.RestoreSummary }>;
@@ -191,6 +192,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setState((s) => ({ ...s, data: { ...empty, islands: s.data.islands } }));
   }, []);
 
+  const clearIslands = useCallback(async () => {
+    await db.clearIslands();
+    setState((s) => ({ ...s, data: { ...s.data, islands: [] } }));
+  }, []);
+
   // -- Backup / restore -----------------------------------------------------
   // All local — export produces a Blob for the officer to save via the OS
   // file picker; restore only reads a File the officer explicitly chose.
@@ -241,7 +247,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [loadAll]);
 
   const value: StoreContextValue = {
-    ...state, setupPin, unlock, lock, changePin, touchActivity, upsert, remove, updateSettings, wipeAllData,
+    ...state, setupPin, unlock, lock, changePin, touchActivity, upsert, remove, updateSettings, wipeAllData, clearIslands,
     exportBackup, inspectBackup, restoreFromBackup,
   };
 

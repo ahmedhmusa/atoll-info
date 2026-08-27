@@ -80,6 +80,11 @@ export async function clearAllData(): Promise<void> {
   await tx.done;
 }
 
+export async function clearIslands(): Promise<void> {
+  const db = await getDB();
+  await db.clear('islands');
+}
+
 export async function getCryptoConfig(): Promise<CryptoConfigRecord | undefined> {
   const db = await getDB();
   return db.get('cryptoConfig', 'crypto-config');

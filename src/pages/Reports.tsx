@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Plus, ChevronRight } from 'lucide-react';
 import { useStore, newRecord, touchRecord } from '../state/store';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
@@ -33,7 +34,10 @@ const Reports: React.FC = () => {
       {filtered.map((r) => (
         <div key={r.id} className="list-item" style={{ cursor: 'pointer' }} onClick={() => setSel(r)}>
           <div className="li-main"><div className="li-title">{r.title}</div><div className="li-sub">{islandName(r.islandId)} · {formatDate(r.date)} · Confidence: {r.confidence}</div></div>
-          <Badge text={r.status} kind={r.status === 'Open' ? 'accent' : 'ok'} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Badge text={r.status} kind={r.status === 'Open' ? 'accent' : 'ok'} />
+            <ChevronRight size={18} className="li-chevron" />
+          </div>
         </div>
       ))}
       {filtered.length === 0 && <div className="empty-state">No reports match this filter — tap + to add one.</div>}
@@ -58,7 +62,7 @@ const Reports: React.FC = () => {
         />
       )}
 
-      <button className="fab" onClick={() => setEditing('new')} aria-label="Add report">+</button>
+      <button className="fab" onClick={() => setEditing('new')} aria-label="Add report"><Plus size={24} strokeWidth={2.5} /></button>
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Plus, X, CheckSquare, Square } from 'lucide-react';
 import { useStore, newRecord, touchRecord } from '../state/store';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
@@ -18,19 +19,22 @@ const Tasks: React.FC = () => {
   return (
     <div style={{ position: 'relative', minHeight: '60vh' }}>
       <div className="section-title">Tasks</div>
-      <div className="section-sub">Tap a task to mark done / reopen. Long-press style delete via the ✕.</div>
+      <div className="section-sub">Tap a task to mark done / reopen.</div>
 
       {sorted.map((t) => (
         <div key={t.id} className="list-item">
-          <div className="li-main" style={{ cursor: 'pointer' }} onClick={() => toggle(t)}>
-            <div className="li-title" style={{ textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'var(--text-faint)' : 'var(--text)' }}>
-              {t.done ? '☑' : '☐'} {t.title}
+          <div className="li-main" style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => toggle(t)}>
+            {t.done ? <CheckSquare size={19} style={{ color: 'var(--accent)', flexShrink: 0 }} /> : <Square size={19} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />}
+            <div style={{ minWidth: 0 }}>
+              <div className="li-title" style={{ textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'var(--text-faint)' : 'var(--text)' }}>
+                {t.title}
+              </div>
+              <div className="li-sub">Due {t.due ? formatDate(t.due) : '—'}</div>
             </div>
-            <div className="li-sub">Due {t.due ? formatDate(t.due) : '—'}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Badge text={t.priority} kind={t.priority === 'High' ? 'danger' : t.priority === 'Medium' ? 'accent' : 'neutral'} />
-            <button className="icon-btn" onClick={() => remove('tasks', t.id)}>✕</button>
+            <button className="icon-btn" onClick={() => remove('tasks', t.id)} aria-label="Delete task"><X size={13} /></button>
           </div>
         </div>
       ))}
@@ -39,7 +43,7 @@ const Tasks: React.FC = () => {
       {adding && (
         <TaskForm onClose={() => setAdding(false)} onSave={async (t) => { await upsert('tasks', t); setAdding(false); }} />
       )}
-      <button className="fab" onClick={() => setAdding(true)} aria-label="Add task">+</button>
+      <button className="fab" onClick={() => setAdding(true)} aria-label="Add task"><Plus size={24} strokeWidth={2.5} /></button>
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Shield, Lock } from 'lucide-react';
 import { useStore } from '../state/store';
 
 const MIN_PIN_LENGTH = 6;
@@ -37,7 +38,7 @@ export const LockScreen: React.FC = () => {
   if (!hasPin) {
     return (
       <div className="lock-screen">
-        <div className="lock-badge">🛡️</div>
+        <div className="lock-badge"><Shield size={30} strokeWidth={1.75} /></div>
         <div className="lock-title">Set Up Your PIN</div>
         <div className="lock-sub">
           One-time setup. Choose a PIN (min. {MIN_PIN_LENGTH} characters). It encrypts everything on this device and
@@ -62,7 +63,7 @@ export const LockScreen: React.FC = () => {
 
   return (
     <div className="lock-screen">
-      <div className="lock-badge">🔒</div>
+      <div className="lock-badge"><Lock size={28} strokeWidth={1.75} /></div>
       <div className="lock-title">Atoll Info Locked</div>
       <div className="lock-sub">Enter your PIN to unlock.</div>
       <form onSubmit={handleUnlockSubmit} style={{ width: '100%', maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>

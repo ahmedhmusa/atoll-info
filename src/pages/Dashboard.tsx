@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { UserX, ShieldAlert, Radio, FileText, Users, CheckSquare, Plus } from 'lucide-react';
 import { useStore, newRecord } from '../state/store';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
@@ -8,6 +9,7 @@ import type { TaskItem, TaskPriority } from '../types';
 
 const Dashboard: React.FC = () => {
   const { data, settings, upsert } = useStore();
+  const navigate = useNavigate();
   const [islandId, setIslandId] = useState<string>('');
   const [adding, setAdding] = useState(false);
 
@@ -20,11 +22,15 @@ const Dashboard: React.FC = () => {
   const openTasks = data.tasks.filter((t) => !t.done);
   const recentReports = [...fr].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
 
-  const stat = (n: number, label: string, color?: string) => (
-    <div className="stat-tile">
-      <div className="num" style={color ? { color } : undefined}>{n}</div>
+  const StatTile: React.FC<{ n: number; label: string; hint: string; color: string; Icon: React.ElementType; onClick: () => void }> = ({ n, label, hint, color, Icon, onClick }) => (
+    <button className="stat-tile" onClick={onClick} style={{ textAlign: 'left', cursor: 'pointer' }} title={hint}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div className="num" style={{ color }}>{n}</div>
+        <Icon size={16} style={{ color, opacity: 0.85, marginTop: 2 }} />
+      </div>
       <div className="label">{label}</div>
-    </div>
+      <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 3, lineHeight: 1.3 }}>{hint}</div>
+    </button>
   );
 
   return (
@@ -40,14 +46,32 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="stat-grid" style={{ marginBottom: 10 }}>
-        {stat(sellers.length, 'Suspected Sellers', 'var(--danger)')}
-        {stat(users.length, 'Suspected Users', 'var(--accent)')}
-        {stat(fi.length, 'Informants')}
-        {stat(fr.length, 'Reports')}
+        <StatTile
+          n={sellers.length} label="Suspected Sellers" hint="Persons flagged as Suspected Dealer" color="var(--danger)" Icon={ShieldAlert}
+          onClick={() => navigate('/persons?category=' + encodeURIComponent('Suspected Dealer'))}
+        />
+        <StatTile
+          n={users.length} label="Suspected Users" hint="Persons flagged as Suspected User" color="var(--accent)" Icon={UserX}
+          onClick={() => navigate('/persons?category=' + encodeURIComponent('Suspected User'))}
+        />
+        <StatTile
+          n={fi.length} label="Informants" hint="Confidential sources on record" color="var(--text)" Icon={Radio}
+          onClick={() => navigate('/informants')}
+        />
+        <StatTile
+          n={fr.length} label="Reports" hint="All intelligence reports logged" color="var(--text)" Icon={FileText}
+          onClick={() => navigate('/reports')}
+        />
       </div>
       <div className="stat-grid">
-        {stat(fp.length, 'Total Persons')}
-        {stat(openTasks.length, 'Open Tasks')}
+        <StatTile
+          n={fp.length} label="Total Persons" hint="Every person record, any category" color="var(--text)" Icon={Users}
+          onClick={() => navigate('/persons')}
+        />
+        <StatTile
+          n={openTasks.length} label="Open Tasks" hint="Follow-ups not yet marked done" color="var(--text)" Icon={CheckSquare}
+          onClick={() => navigate('/tasks')}
+        />
       </div>
 
       <div className="card" style={{ marginTop: 12 }}>
@@ -70,7 +94,9 @@ const Dashboard: React.FC = () => {
             <Badge text={t.priority} kind={t.priority === 'High' ? 'danger' : 'neutral'} />
           </Link>
         ))}
-        <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={() => setAdding(true)}>+ Add Task</button>
+        <button className="btn btn-primary" style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => setAdding(true)}>
+          <Plus size={16} strokeWidth={2.5} /> Add Task
+        </button>
       </div>
 
       {adding && <QuickTaskForm onClose={() => setAdding(false)} onSave={async (t) => { await upsert('tasks', t); setAdding(false); }} />}
