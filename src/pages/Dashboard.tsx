@@ -17,8 +17,8 @@ const Dashboard: React.FC = () => {
   const fp = byIsland(data.persons);
   const fi = byIsland(data.informants);
   const fr = byIsland(data.reports);
-  const sellers = fp.filter((p) => p.category === 'Suspected Dealer');
-  const users = fp.filter((p) => p.category === 'Suspected User');
+  const dealers = fp.filter((p) => (p.categories ?? []).includes('Dealer'));
+  const drugUsers = fp.filter((p) => (p.categories ?? []).includes('Drug User'));
   const openTasks = data.tasks.filter((t) => !t.done);
   const recentReports = [...fr].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
 
@@ -47,12 +47,12 @@ const Dashboard: React.FC = () => {
 
       <div className="stat-grid" style={{ marginBottom: 10 }}>
         <StatTile
-          n={sellers.length} label="Suspected Sellers" hint="Persons flagged as Suspected Dealer" color="var(--danger)" Icon={ShieldAlert}
-          onClick={() => navigate('/persons?category=' + encodeURIComponent('Suspected Dealer'))}
+          n={dealers.length} label="Dealers" hint="Persons tagged as Dealer" color="var(--danger)" Icon={ShieldAlert}
+          onClick={() => navigate('/persons?category=' + encodeURIComponent('Dealer'))}
         />
         <StatTile
-          n={users.length} label="Suspected Users" hint="Persons flagged as Suspected User" color="var(--accent)" Icon={UserX}
-          onClick={() => navigate('/persons?category=' + encodeURIComponent('Suspected User'))}
+          n={drugUsers.length} label="Drug Users" hint="Persons tagged as Drug User" color="var(--accent)" Icon={UserX}
+          onClick={() => navigate('/persons?category=' + encodeURIComponent('Drug User'))}
         />
         <StatTile
           n={fi.length} label="Informants" hint="Confidential sources on record" color="var(--text)" Icon={Radio}

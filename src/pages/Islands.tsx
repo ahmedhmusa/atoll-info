@@ -14,8 +14,8 @@ const Islands: React.FC = () => {
     const here = data.persons.filter((p) => p.islandId === isl.id);
     return {
       island: isl,
-      sellers: here.filter((p) => p.category === 'Suspected Dealer'),
-      users: here.filter((p) => p.category === 'Suspected User'),
+      sellers: here.filter((p) => (p.categories ?? []).includes('Dealer')),
+      users: here.filter((p) => (p.categories ?? []).includes('Drug User')),
       informants: data.informants.filter((i) => i.islandId === isl.id).length,
       reports: data.reports.filter((r) => r.islandId === isl.id).length,
     };
@@ -70,12 +70,12 @@ const Islands: React.FC = () => {
           <div className="card-title" style={{ color: 'var(--danger)' }}>Suspected Sellers ({sel.sellers.length})</div>
           {sel.sellers.length === 0 && <div className="empty-state" style={{ padding: '10px 0' }}>None on record.</div>}
           {sel.sellers.map((p) => (
-            <div key={p.id} className="kv-row"><span className="k">{p.alias ? `${p.name} "${p.alias}"` : p.name}</span></div>
+            <div key={p.id} className="kv-row"><span className="k">{p.nickname ? `${p.fullName} "${p.nickname}"` : p.fullName}</span></div>
           ))}
           <div className="card-title" style={{ color: 'var(--accent)', marginTop: 18 }}>Suspected Users ({sel.users.length})</div>
           {sel.users.length === 0 && <div className="empty-state" style={{ padding: '10px 0' }}>None on record.</div>}
           {sel.users.map((p) => (
-            <div key={p.id} className="kv-row"><span className="k">{p.alias ? `${p.name} "${p.alias}"` : p.name}</span></div>
+            <div key={p.id} className="kv-row"><span className="k">{p.nickname ? `${p.fullName} "${p.nickname}"` : p.fullName}</span></div>
           ))}
           <div className="kv-row" style={{ marginTop: 12 }}><span className="k">Informants</span><span className="v">{sel.informants}</span></div>
           <div className="kv-row"><span className="k">Reports</span><span className="v">{sel.reports}</span></div>

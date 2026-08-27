@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, ChevronRight } from 'lucide-react';
+import { Plus, ChevronRight, Expand } from 'lucide-react';
 import { useStore, newRecord, touchRecord } from '../state/store';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
 import Avatar from '../components/Avatar';
 import PhotoField from '../components/PhotoField';
+import PhotoLightbox from '../components/PhotoLightbox';
 import type { Informant, Level } from '../types';
 
 const LEVELS: Level[] = ['Low', 'Medium', 'High'];
@@ -15,6 +16,7 @@ const Informants: React.FC = () => {
   const [islandId, setIslandId] = useState('');
   const [sel, setSel] = useState<Informant | null>(null);
   const [editing, setEditing] = useState<Informant | 'new' | null>(null);
+  const [lightbox, setLightbox] = useState<string | null>(null);
 
   const islandName = (id: string) => data.islands.find((i) => i.id === id)?.name ?? '—';
   const filtered = useMemo(() => data.informants.filter((i) => !islandId || i.islandId === islandId), [data.informants, islandId]);
@@ -47,7 +49,14 @@ const Informants: React.FC = () => {
       {sel && (
         <Modal title={sel.codeName} onClose={() => setSel(null)}>
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14 }}>
-            <Avatar src={sel.photoDataUrl} size={72} />
+            <button
+              type="button"
+              onClick={() => sel.photoDataUrl && setLightbox(sel.photoDataUrl)}
+              style={{ padding: 0, border: 'none', background: 'none', cursor: sel.photoDataUrl ? 'zoom-in' : 'default', position: 'relative' }}
+            >
+              <Avatar src={sel.photoDataUrl} size={72} />
+              {sel.photoDataUrl && <Expand size={11} style={{ position: 'absolute', bottom: 2, right: 2, color: '#fff', background: 'rgba(0,0,0,0.5)', borderRadius: '50%', padding: 2 }} />}
+            </button>
             <div className="section-sub" style={{ margin: 0 }}>{islandName(sel.islandId)} · Reliability: {sel.reliability}</div>
           </div>
           <div style={{ fontSize: 14 }}>{sel.notes || 'No notes.'}</div>
@@ -67,6 +76,8 @@ const Informants: React.FC = () => {
       )}
 
       <button className="fab" onClick={() => setEditing('new')} aria-label="Add informant"><Plus size={24} strokeWidth={2.5} /></button>
+
+      {lightbox && <PhotoLightbox src={lightbox} title="Photo" onClose={() => setLightbox(null)} />}
     </div>
   );
 };
@@ -89,7 +100,7 @@ const InformantForm: React.FC<{ existing: Informant | null; onClose: () => void;
 
   return (
     <Modal title={existing ? 'Edit Informant' : 'New Informant'} onClose={onClose}>
-      <PhotoField value={photoDataUrl} onChange={setPhotoDataUrl} />
+      <PhotoField label="Photo" value={photoDataUrl} onChange={setPhotoDataUrl} />
       {photoDataUrl && (
         <div className="field-hint" style={{ marginTop: -8, marginBottom: 14 }}>
           A photo can reveal identity even with a code name on file — handle per your source-protection policy.

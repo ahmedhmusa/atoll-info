@@ -16,16 +16,23 @@ export interface Island {
   name: string;
 }
 
-export type PersonCategory = 'Person of Interest' | 'Suspected User' | 'Suspected Dealer' | 'Cleared';
+export type PersonCategory = 'Dealer' | 'Drug User' | 'Person of Interest';
+export type DrugType = 'Cocaine' | 'Heroin' | 'Cannabis' | 'Party Drugs' | 'Alcohol' | 'Meth';
+export type FlagStatus = 'None' | 'Jailed' | 'Faruvaa' | 'On-Watch' | 'On Investigation';
 
 export interface Person extends AuditFields {
   id: ID;
-  name: string;
-  alias?: string;
+  fullName: string;
+  nickname?: string;
+  idCardNumber?: string;
   islandId: ID;
-  category: PersonCategory;
+  categories: PersonCategory[]; // multi-select
+  drugTypes: DrugType[]; // multi-select
+  networkConnections?: string; // free text — known associates/supply chain links
   notes?: string;
-  photoDataUrl?: string; // small, resized JPEG data URL — stored (and encrypted) inline with the record
+  flagStatus: FlagStatus;
+  photoDataUrl?: string; // full/reference photo
+  idPhotoDataUrl?: string; // ID card photo
 }
 
 export type Level = 'Low' | 'Medium' | 'High';
