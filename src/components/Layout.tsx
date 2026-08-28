@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { LayoutDashboard, MapPin, Users, Radio, FileText, CheckSquare, Settings as SettingsIcon, Lock } from 'lucide-react';
 import { useStore } from '../state/store';
 
@@ -14,11 +14,14 @@ const NAV = [
 
 export const Layout: React.FC = () => {
   const { settings, lock } = useStore();
+  const { pathname } = useLocation();
+  const isDashboard = pathname === '/';
+
   return (
     <div className="app-shell">
       <header className="app-header">
         <div>
-          <h1>Atoll Info</h1>
+          {!isDashboard && <h1>Atoll Info</h1>}
           <div className="subtitle">{settings?.agencyLabel}</div>
         </div>
         <div className="header-actions">

@@ -21,14 +21,14 @@ but you can add, rename, or remove islands freely.
   Islands" option if you want to wipe the starting set and build your own
   list from scratch. Each island still shows sellers and users counted and
   listed **separately**. Tap an island to see the actual names in each group.
-- **Persons** — full name, nickname, ID card number, island, **category**
-  (Dealer / Drug User / Person of Interest — select any that apply),
-  **types of drugs involved** (Cocaine, Heroin, Cannabis, Party Drugs,
-  Alcohol, Meth — select any that apply), drug network connections
-  (free text), flag status (None / Jailed / Faruvaa / On-Watch / On
-  Investigation), notes, and two optional photos — a full photo and an ID
-  card photo — each viewable full-screen and choosable from the camera or
-  the photo gallery.
+- **Persons** — full name, nickname, ID card number, date of birth, address,
+  contact number, island, **category** (Dealer / Drug User / Person of
+  Interest — select any that apply), **types of drugs involved** (Cocaine,
+  Heroin, Cannabis, Party Drugs, Alcohol, Meth — select any that apply),
+  drug network connections (free text), flag status (None / Jailed /
+  Faruvaa / On-Watch / On Investigation), notes, and two optional photos —
+  a full photo and an ID card photo — each viewable full-screen and
+  choosable from the camera or the photo gallery.
 - **Informants** — a confidential code name, island, reliability, notes, and
   an optional photo. Real identities are never asked for or shown by name —
   that's the point of a code name (the app does warn that a photo can still

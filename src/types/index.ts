@@ -25,6 +25,9 @@ export interface Person extends AuditFields {
   fullName: string;
   nickname?: string;
   idCardNumber?: string;
+  dateOfBirth?: string; // ISO date
+  address?: string;
+  contactNumber?: string;
   islandId: ID;
   categories: PersonCategory[]; // multi-select
   drugTypes: DrugType[]; // multi-select

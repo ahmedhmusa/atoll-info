@@ -7,6 +7,7 @@ import Badge from '../components/Badge';
 import Avatar from '../components/Avatar';
 import PhotoField from '../components/PhotoField';
 import PhotoLightbox from '../components/PhotoLightbox';
+import { formatDate } from '../lib/util';
 import type { Person, PersonCategory, DrugType, FlagStatus } from '../types';
 
 const CATEGORIES: PersonCategory[] = ['Dealer', 'Drug User', 'Person of Interest'];
@@ -123,6 +124,14 @@ const Persons: React.FC = () => {
             </div>
           </div>
 
+          {(sel.dateOfBirth || sel.address || sel.contactNumber) && (
+            <>
+              {sel.dateOfBirth && <div className="kv-row"><span className="k">Date of birth</span><span className="v">{formatDate(sel.dateOfBirth)}</span></div>}
+              {sel.contactNumber && <div className="kv-row"><span className="k">Contact number</span><span className="v">{sel.contactNumber}</span></div>}
+              {sel.address && <div className="kv-row"><span className="k">Address</span><span className="v">{sel.address}</span></div>}
+            </>
+          )}
+
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
             {displayCategories(sel).map((c) => <Badge key={c} text={c} kind={categoryKind(c) as any} />)}
             {sel.flagStatus && sel.flagStatus !== 'None' && <Badge text={sel.flagStatus} kind={flagKind(sel.flagStatus) as any} />}
@@ -184,6 +193,9 @@ const PersonForm: React.FC<{ existing: Person | null; onClose: () => void; onSav
   const [fullName, setFullName] = useState(existing ? displayName(existing) : '');
   const [nickname, setNickname] = useState(existing?.nickname ?? '');
   const [idCardNumber, setIdCardNumber] = useState(existing?.idCardNumber ?? '');
+  const [dateOfBirth, setDateOfBirth] = useState(existing?.dateOfBirth ?? '');
+  const [address, setAddress] = useState(existing?.address ?? '');
+  const [contactNumber, setContactNumber] = useState(existing?.contactNumber ?? '');
   const [islandId, setIslandId] = useState(existing?.islandId ?? data.islands[0]?.id ?? '');
   const [categories, setCategories] = useState<PersonCategory[]>(existing ? displayCategories(existing) : []);
   const [drugTypes, setDrugTypes] = useState<DrugType[]>(existing?.drugTypes ?? []);
@@ -198,7 +210,7 @@ const PersonForm: React.FC<{ existing: Person | null; onClose: () => void; onSav
 
   const save = () => {
     if (!fullName.trim() || !islandId) return;
-    const base = { fullName, nickname, idCardNumber, islandId, categories, drugTypes, networkConnections, notes, flagStatus, photoDataUrl, idPhotoDataUrl };
+    const base = { fullName, nickname, idCardNumber, dateOfBirth, address, contactNumber, islandId, categories, drugTypes, networkConnections, notes, flagStatus, photoDataUrl, idPhotoDataUrl };
     const record: Person = existing ? touchRecord({ ...existing, ...base }) : { ...newRecord(), ...base };
     onSave(record);
   };
@@ -211,6 +223,9 @@ const PersonForm: React.FC<{ existing: Person | null; onClose: () => void; onSav
       <div className="field"><label>Full Name *</label><input value={fullName} onChange={(e) => setFullName(e.target.value)} autoFocus /></div>
       <div className="field"><label>Nick Name</label><input value={nickname} onChange={(e) => setNickname(e.target.value)} /></div>
       <div className="field"><label>ID Card Number</label><input value={idCardNumber} onChange={(e) => setIdCardNumber(e.target.value)} /></div>
+      <div className="field"><label>Date of Birth</label><input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} /></div>
+      <div className="field"><label>Address</label><textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} /></div>
+      <div className="field"><label>Contact Number</label><input type="tel" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} placeholder="e.g. +960 7XX XXXX" /></div>
       <div className="field">
         <label>Island *</label>
         <select value={islandId} onChange={(e) => setIslandId(e.target.value)}>
