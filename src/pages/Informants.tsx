@@ -59,6 +59,12 @@ const Informants: React.FC = () => {
             </button>
             <div className="section-sub" style={{ margin: 0 }}>{islandName(sel.islandId)} · Reliability: {sel.reliability}</div>
           </div>
+          {sel.contactNumber && (
+            <div className="kv-row" style={{ marginBottom: 10 }}>
+              <span className="k">Contact number</span>
+              <a className="v" href={`tel:${sel.contactNumber.replace(/\s/g, '')}`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>{sel.contactNumber}</a>
+            </div>
+          )}
           <div style={{ fontSize: 14 }}>{sel.notes || 'No notes.'}</div>
           <div className="btn-row" style={{ marginTop: 16 }}>
             <button className="btn" onClick={() => { setEditing(sel); setSel(null); }}>Edit</button>
@@ -87,14 +93,15 @@ const InformantForm: React.FC<{ existing: Informant | null; onClose: () => void;
   const [codeName, setCodeName] = useState(existing?.codeName ?? '');
   const [islandId, setIslandId] = useState(existing?.islandId ?? data.islands[0]?.id ?? '');
   const [reliability, setReliability] = useState<Level>(existing?.reliability ?? 'Medium');
+  const [contactNumber, setContactNumber] = useState(existing?.contactNumber ?? '');
   const [notes, setNotes] = useState(existing?.notes ?? '');
   const [photoDataUrl, setPhotoDataUrl] = useState(existing?.photoDataUrl);
 
   const save = () => {
     if (!codeName.trim() || !islandId) return;
     const record: Informant = existing
-      ? touchRecord({ ...existing, codeName, islandId, reliability, notes, photoDataUrl })
-      : { ...newRecord(), codeName, islandId, reliability, notes, photoDataUrl };
+      ? touchRecord({ ...existing, codeName, islandId, reliability, contactNumber, notes, photoDataUrl })
+      : { ...newRecord(), codeName, islandId, reliability, contactNumber, notes, photoDataUrl };
     onSave(record);
   };
 
@@ -118,6 +125,10 @@ const InformantForm: React.FC<{ existing: Informant | null; onClose: () => void;
         <select value={reliability} onChange={(e) => setReliability(e.target.value as Level)}>
           {LEVELS.map((l) => <option key={l}>{l}</option>)}
         </select>
+      </div>
+      <div className="field">
+        <label>Contact Number</label>
+        <input type="tel" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} placeholder="e.g. +960 7XX XXXX" />
       </div>
       <div className="field"><label>Notes</label><textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
       <button className="btn btn-primary" onClick={save}>Save Informant</button>

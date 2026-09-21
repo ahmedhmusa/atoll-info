@@ -47,6 +47,7 @@ export interface Informant extends AuditFields {
   codeName: string; // never a real name — that's the whole point of a code name
   islandId: ID;
   reliability: Level;
+  contactNumber?: string;
   notes?: string;
   photoDataUrl?: string; // optional — e.g. a covert reference photo, if the officer has one
 }
