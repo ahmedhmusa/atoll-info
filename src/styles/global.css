@@ -49,7 +49,11 @@ body {
   position: fixed; /* belt-and-braces against iOS Safari rubber-band scroll of the document */
   inset: 0;
 }
-#root { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+#root {
+  height: 100dvh; /* fallback for browsers/first paint before JS sets --app-vh */
+  height: calc(var(--app-vh, 1vh) * 100);
+  display: flex; flex-direction: column; overflow: hidden;
+}
 
 ::-webkit-scrollbar { display: none; width: 0; height: 0; }
 * { scrollbar-width: none; -ms-overflow-style: none; }
@@ -65,7 +69,11 @@ body {
  * inner div ever moves, an `absolute`-positioned nav anchored to this
  * `relative` shell stays visually pinned with no iOS quirk to trigger.
  */
-.app-shell { position: relative; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+.app-shell {
+  position: relative; display: flex; flex-direction: column; overflow: hidden;
+  height: 100dvh; /* fallback */
+  height: calc(var(--app-vh, 1vh) * 100);
+}
 
 .app-header {
   position: sticky; top: 0; z-index: 20;
@@ -166,7 +174,9 @@ body {
 .empty-state { text-align: center; padding: 40px 16px; color: var(--text-dim); }
 
 .lock-screen {
-  min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; align-items: center;
+  min-height: 100dvh; /* fallback */
+  min-height: calc(var(--app-vh, 1vh) * 100);
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
   padding: 24px; gap: 18px; background: var(--bg);
 }
 .lock-badge { width: 72px; height: 72px; border-radius: 22px; background: var(--card); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--accent); }
@@ -188,7 +198,12 @@ body {
 .audit-line { font-size: 10.5px; color: var(--text-faint); font-family: var(--font-mono); margin-top: 10px; }
 
 .modal-overlay { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,0.55); display: flex; align-items: flex-end; justify-content: center; }
-.modal-sheet { background: var(--card); width: 100%; max-width: 480px; border-radius: 22px 22px 0 0; max-height: 88dvh; overflow-y: auto; padding-bottom: var(--safe-bottom); }
+.modal-sheet {
+  background: var(--card); width: 100%; max-width: 480px; border-radius: 22px 22px 0 0;
+  max-height: 88dvh; /* fallback */
+  max-height: calc(var(--app-vh, 1vh) * 88);
+  overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: var(--safe-bottom);
+}
 .modal-header { position: sticky; top: 0; background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
 .modal-handle { display: flex; justify-content: center; padding: 8px 0 2px; }
 .modal-handle span { width: 36px; height: 4px; border-radius: 2px; background: var(--border); display: block; }
