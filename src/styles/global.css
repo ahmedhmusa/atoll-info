@@ -39,9 +39,14 @@ html, body {
   height: 100%;
   overflow: hidden; /* the page itself never scrolls — only .app-main does */
 }
+/* Painted in the tab bar's color: iOS standalone apps with a translucent
+   status bar can report a screen shorter than the real one, and whatever
+   is behind the app shows through at the bottom. Matching it to the tab
+   bar makes that area read as part of the menu, like a native app. */
+html { background: var(--card); }
 body {
   margin: 0;
-  background: var(--bg);
+  background: transparent;
   color: var(--text);
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
@@ -50,7 +55,10 @@ body {
   inset: 0;
 }
 #root {
-  position: fixed; top: 0; right: 0; bottom: 0; left: 0; /* pinned to every screen edge — no height measurement, so no gap */
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 100vh;
+  height: 100lvh; /* iOS "large viewport" = the true full screen, unlike bottom:0 / 100% */
+  background: var(--bg);
   display: flex; flex-direction: column; overflow: hidden;
 }
 
@@ -91,9 +99,10 @@ body {
 
 .bottom-nav {
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 30;
-  display: flex; background: color-mix(in srgb, var(--card) 94%, transparent);
-  backdrop-filter: blur(16px); border-top: 1px solid var(--border);
-  padding: 6px 2px calc(6px + var(--safe-bottom));
+  display: flex; background: var(--card);
+  border-top: 0.5px solid var(--border);
+  padding: 4px 2px env(safe-area-inset-bottom, 0px);
+  min-height: calc(50px + env(safe-area-inset-bottom, 0px));
 }
 .bottom-nav a {
   flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
