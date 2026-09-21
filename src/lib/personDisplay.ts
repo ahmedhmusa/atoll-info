@@ -19,3 +19,23 @@ export function primaryCategoryColor(p: Person | any): string {
   if (cats.includes('Drug User')) return 'var(--accent)';
   return 'var(--text-dim)';
 }
+
+// One distinct color per category, used for the network map slices + legend.
+export const CATEGORY_COLORS: Record<string, string> = {
+  'Dealer': 'var(--danger)',
+  'Street Dealer': '#ff7a59',
+  'Carrier': 'var(--warn)',
+  'Theft': '#8e7cd9',
+  'Drug User': 'var(--accent)',
+  'Person of Interest': 'var(--text-dim)',
+};
+
+export function categoryColor(c: string): string {
+  return CATEGORY_COLORS[c] ?? 'var(--text-dim)';
+}
+
+/** Nickname when there is one, otherwise the full name — shortened for small labels. */
+export function shortLabel(p: any, max = 14): string {
+  const label = (p.nickname ?? '').trim() || displayName(p);
+  return label.length > max ? label.slice(0, max - 1) + '…' : label;
+}
