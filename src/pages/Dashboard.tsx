@@ -119,6 +119,12 @@ const Dashboard: React.FC = () => {
   );
 };
 
+// Network labels: nickname when there is one, otherwise the full name.
+function networkLabel(p: Person): string {
+  const label = (p.nickname ?? '').trim() || displayName(p);
+  return label.length > 14 ? label.slice(0, 13) + '…' : label;
+}
+
 const NetworkMesh: React.FC<{ persons: Person[]; onSelectPerson: (p: Person) => void }> = ({ persons, onSelectPerson }) => {
   if (persons.length === 0) return <div className="empty-state">No persons on this island yet.</div>;
 
@@ -154,7 +160,7 @@ const NetworkMesh: React.FC<{ persons: Person[]; onSelectPerson: (p: Person) => 
       {positioned.map(({ p, x, y }) => (
         <g key={p.id} onClick={() => onSelectPerson(p)} style={{ cursor: 'pointer' }}>
           <circle cx={x} cy={y} r={9} fill={primaryCategoryColor(p)} stroke="var(--card)" strokeWidth={1.5} />
-          <text x={x} y={y + 17} textAnchor="middle" fontSize="8" fill="var(--text-dim)">{displayName(p).split(' ')[0].slice(0, 10)}</text>
+          <text x={x} y={y + 17} textAnchor="middle" fontSize="8" fill="var(--text-dim)">{networkLabel(p)}</text>
         </g>
       ))}
     </svg>
