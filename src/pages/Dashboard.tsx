@@ -5,7 +5,8 @@ import { useStore, newRecord } from '../state/store';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
 import { formatDate, todayISO } from '../lib/util';
-import type { TaskItem, TaskPriority } from '../types';
+import { displayName, primaryCategoryColor } from '../lib/personDisplay';
+import type { Person, TaskItem, TaskPriority } from '../types';
 
 const Dashboard: React.FC = () => {
   const { data, settings, upsert } = useStore();
@@ -99,8 +100,63 @@ const Dashboard: React.FC = () => {
         </button>
       </div>
 
+      {islandId && (
+        <div className="card">
+          <div className="card-title">Network — {data.islands.find((i) => i.id === islandId)?.name}</div>
+          <NetworkMesh persons={fp} onSelectPerson={(p) => navigate('/persons?category=' + encodeURIComponent((p.categories ?? [])[0] ?? ''))} />
+          <div style={{ display: 'flex', gap: 14, justifyContent: 'center', marginTop: 10, fontSize: 11 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--danger)', display: 'inline-block' }} /> Dealer</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} /> Drug User</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--text-dim)', display: 'inline-block' }} /> Other</span>
+          </div>
+          <div className="field-hint" style={{ textAlign: 'center', marginTop: 6 }}>Lines show explicit "Linked Persons" set on each record — add those in a person's Edit form to build this out.</div>
+        </div>
+      )}
+
       {adding && <QuickTaskForm onClose={() => setAdding(false)} onSave={async (t) => { await upsert('tasks', t); setAdding(false); }} />}
     </div>
+  );
+};
+
+const NetworkMesh: React.FC<{ persons: Person[]; onSelectPerson: (p: Person) => void }> = ({ persons, onSelectPerson }) => {
+  if (persons.length === 0) return <div className="empty-state">No persons on this island yet.</div>;
+
+  const size = 280;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = persons.length === 1 ? 0 : size * 0.36;
+
+  const positioned = persons.map((p, i) => {
+    const angle = (i / persons.length) * 2 * Math.PI - Math.PI / 2;
+    return { p, x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+  });
+  const byId = new Map(positioned.map((d) => [d.p.id, d]));
+
+  const edges: { a: { x: number; y: number }; b: { x: number; y: number } }[] = [];
+  const seenPairs = new Set<string>();
+  for (const { p } of positioned) {
+    for (const linkedId of p.linkedPersonIds ?? []) {
+      const b = byId.get(linkedId);
+      if (!b) continue; // only draw an edge when both ends are persons on this island
+      const key = [p.id, linkedId].sort().join('|');
+      if (seenPairs.has(key)) continue;
+      seenPairs.add(key);
+      edges.push({ a: byId.get(p.id)!, b });
+    }
+  }
+
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} width="100%" height={Math.min(size, 300)} style={{ maxWidth: 320, display: 'block', margin: '0 auto' }}>
+      {edges.map((e, i) => (
+        <line key={i} x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke="var(--border)" strokeWidth={1.5} />
+      ))}
+      {positioned.map(({ p, x, y }) => (
+        <g key={p.id} onClick={() => onSelectPerson(p)} style={{ cursor: 'pointer' }}>
+          <circle cx={x} cy={y} r={9} fill={primaryCategoryColor(p)} stroke="var(--card)" strokeWidth={1.5} />
+          <text x={x} y={y + 17} textAnchor="middle" fontSize="8" fill="var(--text-dim)">{displayName(p).split(' ')[0].slice(0, 10)}</text>
+        </g>
+      ))}
+    </svg>
   );
 };
 

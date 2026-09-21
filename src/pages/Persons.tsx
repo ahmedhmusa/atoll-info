@@ -8,6 +8,7 @@ import Avatar from '../components/Avatar';
 import PhotoField from '../components/PhotoField';
 import PhotoLightbox from '../components/PhotoLightbox';
 import { formatDate } from '../lib/util';
+import { displayName, displayCategories } from '../lib/personDisplay';
 import type { Person, PersonCategory, DrugType, FlagStatus } from '../types';
 
 const CATEGORIES: PersonCategory[] = ['Dealer', 'Drug User', 'Person of Interest'];
@@ -16,17 +17,6 @@ const FLAG_STATUSES: FlagStatus[] = ['None', 'Jailed', 'Faruvaa', 'On-Watch', 'O
 
 const categoryKind = (c: PersonCategory) => (c === 'Dealer' ? 'danger' : c === 'Drug User' ? 'accent' : 'neutral');
 const flagKind = (f: FlagStatus) => (f === 'Jailed' ? 'danger' : f === 'On-Watch' || f === 'On Investigation' ? 'accent' : f === 'Faruvaa' ? 'danger' : 'neutral');
-
-// Defensive fallback for any record saved under the previous, simpler
-// person shape (single `name`/`category`) so old data doesn't crash the UI.
-function displayName(p: any): string {
-  return p.fullName || p.name || 'Unnamed';
-}
-function displayCategories(p: any): PersonCategory[] {
-  if (Array.isArray(p.categories)) return p.categories;
-  if (p.category) return [p.category];
-  return [];
-}
 
 const Persons: React.FC = () => {
   const { data, upsert, remove } = useStore();
@@ -124,11 +114,12 @@ const Persons: React.FC = () => {
             </div>
           </div>
 
-          {(sel.dateOfBirth || sel.address || sel.contactNumber) && (
+          {(sel.dateOfBirth || sel.address || sel.presentAddress || sel.contactNumber) && (
             <>
               {sel.dateOfBirth && <div className="kv-row"><span className="k">Date of birth</span><span className="v">{formatDate(sel.dateOfBirth)}</span></div>}
               {sel.contactNumber && <div className="kv-row"><span className="k">Contact number</span><span className="v">{sel.contactNumber}</span></div>}
-              {sel.address && <div className="kv-row"><span className="k">Address</span><span className="v">{sel.address}</span></div>}
+              {sel.address && <div className="kv-row"><span className="k">Permanent address</span><span className="v">{sel.address}</span></div>}
+              {sel.presentAddress && <div className="kv-row"><span className="k">Present address</span><span className="v">{sel.presentAddress}</span></div>}
             </>
           )}
 
@@ -150,6 +141,22 @@ const Persons: React.FC = () => {
             <>
               <div className="card-title" style={{ marginTop: 14 }}>Drug Network Connections</div>
               <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{sel.networkConnections}</div>
+            </>
+          )}
+
+          {sel.linkedPersonIds && sel.linkedPersonIds.length > 0 && (
+            <>
+              <div className="card-title" style={{ marginTop: 14 }}>Linked Persons</div>
+              {sel.linkedPersonIds.map((id) => {
+                const p = data.persons.find((x) => x.id === id);
+                if (!p) return null;
+                return (
+                  <div key={id} className="list-item" style={{ cursor: 'pointer' }} onClick={() => setSel(p)}>
+                    <div className="li-main"><div className="li-title">{displayName(p)}</div><div className="li-sub">{islandName(p.islandId)}</div></div>
+                    <ChevronRight size={18} className="li-chevron" />
+                  </div>
+                );
+              })}
             </>
           )}
 
@@ -195,12 +202,14 @@ const PersonForm: React.FC<{ existing: Person | null; onClose: () => void; onSav
   const [idCardNumber, setIdCardNumber] = useState(existing?.idCardNumber ?? '');
   const [dateOfBirth, setDateOfBirth] = useState(existing?.dateOfBirth ?? '');
   const [address, setAddress] = useState(existing?.address ?? '');
+  const [presentAddress, setPresentAddress] = useState(existing?.presentAddress ?? '');
   const [contactNumber, setContactNumber] = useState(existing?.contactNumber ?? '');
   const [islandId, setIslandId] = useState(existing?.islandId ?? data.islands[0]?.id ?? '');
   const [categories, setCategories] = useState<PersonCategory[]>(existing ? displayCategories(existing) : []);
   const [drugTypes, setDrugTypes] = useState<DrugType[]>(existing?.drugTypes ?? []);
   const [networkConnections, setNetworkConnections] = useState(existing?.networkConnections ?? '');
   const [notes, setNotes] = useState(existing?.notes ?? '');
+  const [linkedPersonIds, setLinkedPersonIds] = useState<string[]>(existing?.linkedPersonIds ?? []);
   const [flagStatus, setFlagStatus] = useState<FlagStatus>(existing?.flagStatus ?? 'None');
   const [photoDataUrl, setPhotoDataUrl] = useState(existing?.photoDataUrl);
   const [idPhotoDataUrl, setIdPhotoDataUrl] = useState(existing?.idPhotoDataUrl);
@@ -210,7 +219,7 @@ const PersonForm: React.FC<{ existing: Person | null; onClose: () => void; onSav
 
   const save = () => {
     if (!fullName.trim() || !islandId) return;
-    const base = { fullName, nickname, idCardNumber, dateOfBirth, address, contactNumber, islandId, categories, drugTypes, networkConnections, notes, flagStatus, photoDataUrl, idPhotoDataUrl };
+    const base = { fullName, nickname, idCardNumber, dateOfBirth, address, presentAddress, contactNumber, islandId, categories, drugTypes, networkConnections, linkedPersonIds, notes, flagStatus, photoDataUrl, idPhotoDataUrl };
     const record: Person = existing ? touchRecord({ ...existing, ...base }) : { ...newRecord(), ...base };
     onSave(record);
   };
@@ -224,7 +233,8 @@ const PersonForm: React.FC<{ existing: Person | null; onClose: () => void; onSav
       <div className="field"><label>Nick Name</label><input value={nickname} onChange={(e) => setNickname(e.target.value)} /></div>
       <div className="field"><label>ID Card Number</label><input value={idCardNumber} onChange={(e) => setIdCardNumber(e.target.value)} /></div>
       <div className="field"><label>Date of Birth</label><input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} /></div>
-      <div className="field"><label>Address</label><textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} /></div>
+      <div className="field"><label>Permanent Address</label><textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} /></div>
+      <div className="field"><label>Present Address</label><textarea value={presentAddress} onChange={(e) => setPresentAddress(e.target.value)} rows={2} placeholder="Leave blank if same as permanent address" /></div>
       <div className="field"><label>Contact Number</label><input type="tel" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} placeholder="e.g. +960 7XX XXXX" /></div>
       <div className="field">
         <label>Island *</label>
@@ -246,6 +256,21 @@ const PersonForm: React.FC<{ existing: Person | null; onClose: () => void; onSav
       <div className="field">
         <label>Drug Network Connections</label>
         <textarea value={networkConnections} onChange={(e) => setNetworkConnections(e.target.value)} placeholder="e.g. supplies from X, works with Y…" />
+      </div>
+
+      <div className="field">
+        <label>Linked Persons (select any tracked persons connected to this one)</label>
+        <div className="pill-row" style={{ flexWrap: 'wrap' }}>
+          {data.persons.filter((p) => p.id !== existing?.id).map((p) => (
+            <button
+              key={p.id} type="button" className={`pill ${linkedPersonIds.includes(p.id) ? 'active' : ''}`}
+              onClick={() => setLinkedPersonIds((l) => (l.includes(p.id) ? l.filter((v) => v !== p.id) : [...l, p.id]))}
+            >
+              {displayName(p)}
+            </button>
+          ))}
+        </div>
+        {data.persons.filter((p) => p.id !== existing?.id).length === 0 && <div className="field-hint">Add other persons first to link them here.</div>}
       </div>
 
       <div className="field">

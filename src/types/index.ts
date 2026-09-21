@@ -26,12 +26,14 @@ export interface Person extends AuditFields {
   nickname?: string;
   idCardNumber?: string;
   dateOfBirth?: string; // ISO date
-  address?: string;
+  address?: string; // permanent address
+  presentAddress?: string; // current/present address, if different
   contactNumber?: string;
   islandId: ID;
   categories: PersonCategory[]; // multi-select
   drugTypes: DrugType[]; // multi-select
-  networkConnections?: string; // free text — known associates/supply chain links
+  networkConnections?: string; // free text — known associates/supply chain links, incl. those not tracked as Person records
+  linkedPersonIds?: string[]; // structured connections to other Person records — powers the Dashboard network view
   notes?: string;
   flagStatus: FlagStatus;
   photoDataUrl?: string; // full/reference photo

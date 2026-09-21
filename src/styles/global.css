@@ -35,7 +35,10 @@
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { height: 100%; }
+html, body {
+  height: 100%;
+  overflow: hidden; /* the page itself never scrolls — only .app-main does */
+}
 body {
   margin: 0;
   background: var(--bg);
@@ -43,13 +46,26 @@ body {
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
+  position: fixed; /* belt-and-braces against iOS Safari rubber-band scroll of the document */
+  inset: 0;
 }
-#root { min-height: 100dvh; display: flex; flex-direction: column; }
+#root { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
 
 ::-webkit-scrollbar { display: none; width: 0; height: 0; }
 * { scrollbar-width: none; -ms-overflow-style: none; }
 
-.app-shell { display: flex; flex-direction: column; min-height: 100dvh; }
+/*
+ * Why the bottom nav is `position: absolute` here, not `fixed`:
+ * on iOS Safari (including installed PWAs), a `position: fixed` element
+ * whose page keeps scrolling can visibly detach/lag behind during the
+ * scroll gesture — this is what shows up as "the bottom bar scrolls with
+ * the content". The fix is to make sure the *document* never scrolls at
+ * all (html/body/#root are all locked to 100dvh with overflow hidden,
+ * above), and let only `.app-main` scroll internally. Once nothing but an
+ * inner div ever moves, an `absolute`-positioned nav anchored to this
+ * `relative` shell stays visually pinned with no iOS quirk to trigger.
+ */
+.app-shell { position: relative; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
 
 .app-header {
   position: sticky; top: 0; z-index: 20;
@@ -68,10 +84,10 @@ body {
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
 }
 
-.app-main { flex: 1; overflow-y: auto; padding: 14px 16px calc(96px + var(--safe-bottom)); }
+.app-main { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px 16px calc(96px + var(--safe-bottom)); }
 
 .bottom-nav {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
+  position: absolute; bottom: 0; left: 0; right: 0; z-index: 30;
   display: flex; background: color-mix(in srgb, var(--card) 94%, transparent);
   backdrop-filter: blur(16px); border-top: 1px solid var(--border);
   padding: 6px 2px calc(6px + var(--safe-bottom));
