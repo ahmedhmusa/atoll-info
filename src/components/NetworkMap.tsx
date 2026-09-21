@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import Modal from './Modal';
 import Badge from './Badge';
-import { displayName, displayCategories, categoryColor, shortLabel, CATEGORY_COLORS } from '../lib/personDisplay';
+import { displayName, displayCategories, categoryColor, shortLabel, personChainRank, CATEGORY_COLORS } from '../lib/personDisplay';
 import type { Person, Island } from '../types';
 
 interface Props {
@@ -77,7 +77,14 @@ const NetworkMap: React.FC<Props> = ({ persons, islands, islandId }) => {
   }, [persons, islands, islandId]);
 
   const pos = new Map(layout.nodes.map((n) => [n.p.id, n]));
-  const edges: { a: Node; b: Node; cross: boolean }[] = [];
+  // Direction is inferred from each person's supply-chain position (Dealer
+  // → Street Dealer/Carrier → Drug User), not stored explicitly — a link
+  // between two ranked-but-different roles gets an arrow from the more
+  // upstream person to the more downstream one, colored by how far
+  // upstream the source is. Same-level or unranked pairs stay as plain
+  // undirected lines, since direction genuinely isn't known there.
+  type Edge = { a: Node; b: Node; cross: boolean; directed: boolean; color: string; marker?: string };
+  const edges: Edge[] = [];
   const seen = new Set<string>();
   for (const n of layout.nodes) {
     for (const id of n.p.linkedPersonIds ?? []) {
@@ -86,7 +93,17 @@ const NetworkMap: React.FC<Props> = ({ persons, islands, islandId }) => {
       const key = [n.p.id, id].sort().join('|');
       if (seen.has(key)) continue;
       seen.add(key);
-      edges.push({ a: n, b: m, cross: n.p.islandId !== m.p.islandId });
+      const cross = n.p.islandId !== m.p.islandId;
+      const rN = personChainRank(n.p);
+      const rM = personChainRank(m.p);
+      if (rN !== null && rM !== null && rN !== rM) {
+        const [up, down] = rN < rM ? [n, m] : [m, n];
+        const color = (rN < rM ? rN : rM) === 0 ? '#e0362e' : '#e0a53d';
+        const marker = (rN < rM ? rN : rM) === 0 ? 'url(#arrow-red)' : 'url(#arrow-orange)';
+        edges.push({ a: up, b: down, cross, directed: true, color, marker });
+      } else {
+        edges.push({ a: n, b: m, cross, directed: false, color: 'var(--text-faint)' });
+      }
     }
   }
 
@@ -106,14 +123,36 @@ const NetworkMap: React.FC<Props> = ({ persons, islands, islandId }) => {
     });
   };
 
+  // Shorten the visible line so a directed edge's arrowhead sits at the
+  // edge of the destination dot instead of being drawn under it.
+  const shorten = (e: Edge) => {
+    if (!e.directed) return { x1: e.a.x, y1: e.a.y, x2: e.b.x, y2: e.b.y };
+    const dx = e.b.x - e.a.x, dy = e.b.y - e.a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const pad = R + 4;
+    return { x1: e.a.x, y1: e.a.y, x2: e.b.x - (dx / len) * pad, y2: e.b.y - (dy / len) * pad };
+  };
+
   return (
     <>
       <svg viewBox={`0 0 ${layout.size} ${layout.size}`} width="100%" style={{ maxWidth: 360, display: 'block', margin: '0 auto' }}>
-        {edges.map((e, i) => (
-          <line key={i} x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y}
-            stroke={e.cross ? 'var(--warn)' : 'var(--text-faint)'} strokeWidth={1.3}
-            strokeDasharray={e.cross ? '4 3' : undefined} opacity={0.8} />
-        ))}
+        <defs>
+          <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#e0362e" />
+          </marker>
+          <marker id="arrow-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#e0a53d" />
+          </marker>
+        </defs>
+        {edges.map((e, i) => {
+          const { x1, y1, x2, y2 } = shorten(e);
+          return (
+            <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke={e.color} strokeWidth={e.directed ? 1.8 : 1.3}
+              strokeDasharray={!e.directed ? '3 3' : e.cross ? '6 3' : undefined}
+              markerEnd={e.marker} opacity={e.directed ? 0.95 : 0.6} />
+          );
+        })}
         {layout.labels.map((l, i) => (
           <text key={i} x={l.x} y={l.y} textAnchor="middle" fontSize="9.5" fontWeight={700} fill="var(--text)">{l.text}</text>
         ))}
@@ -135,8 +174,19 @@ const NetworkMap: React.FC<Props> = ({ persons, islands, islandId }) => {
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: col, display: 'inline-block' }} /> {name}
           </span>
         ))}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', justifyContent: 'center', marginTop: 8, fontSize: 10.5, color: 'var(--text-dim)' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="var(--warn)" strokeWidth="1.5" strokeDasharray="4 3" /></svg> Between islands
+          <svg width="20" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="#e0362e" strokeWidth="1.8" /><path d="M16 1 L20 4 L16 7 z" fill="#e0362e" /></svg> Dealer supplies
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <svg width="20" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="#e0a53d" strokeWidth="1.8" /><path d="M16 1 L20 4 L16 7 z" fill="#e0a53d" /></svg> Street/Carrier supplies
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="var(--text-faint)" strokeWidth="1.3" strokeDasharray="3 3" /></svg> Same level / unclear
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ width: 12, height: 12, borderRadius: '50%', border: '1px dashed var(--warn)', display: 'inline-block' }} /> On another island
         </span>
       </div>
 
