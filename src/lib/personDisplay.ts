@@ -39,3 +39,21 @@ export function shortLabel(p: any, max = 14): string {
   const label = (p.nickname ?? '').trim() || displayName(p);
   return label.length > max ? label.slice(0, max - 1) + '…' : label;
 }
+
+// Rough position in the supply chain, used only to decide which way an
+// arrow should point on the network map — lower number = further upstream
+// (closer to the source of supply). Categories with no clear chain
+// position (Theft, Person of Interest) return null, so links involving
+// only those stay undirected.
+const CHAIN_RANK: Partial<Record<string, number>> = {
+  'Dealer': 0,
+  'Street Dealer': 1,
+  'Carrier': 1,
+  'Drug User': 2,
+};
+
+export function personChainRank(p: any): number | null {
+  const cats = displayCategories(p);
+  const ranks = cats.map((c) => CHAIN_RANK[c]).filter((r): r is number => r !== undefined);
+  return ranks.length ? Math.min(...ranks) : null;
+}
