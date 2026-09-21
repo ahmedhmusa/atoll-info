@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Badge: React.FC<{ text: string; kind?: 'neutral' | 'accent' | 'danger' | 'ok' }> = ({ text, kind = 'neutral' }) => (
+const Badge: React.FC<{ text: string; kind?: 'neutral' | 'accent' | 'danger' | 'ok' | 'warn' }> = ({ text, kind = 'neutral' }) => (
   <span className={`badge badge-${kind}`}>{text}</span>
 );
 

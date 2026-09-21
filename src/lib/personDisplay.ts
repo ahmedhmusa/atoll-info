@@ -14,7 +14,8 @@ export function displayCategories(p: any): PersonCategory[] {
 
 export function primaryCategoryColor(p: Person | any): string {
   const cats = displayCategories(p);
-  if (cats.includes('Dealer')) return 'var(--danger)';
+  if (cats.includes('Dealer') || cats.includes('Street Dealer')) return 'var(--danger)';
+  if (cats.includes('Carrier') || cats.includes('Theft')) return 'var(--warn)';
   if (cats.includes('Drug User')) return 'var(--accent)';
   return 'var(--text-dim)';
 }

@@ -14,7 +14,7 @@ const Islands: React.FC = () => {
     const here = data.persons.filter((p) => p.islandId === isl.id);
     return {
       island: isl,
-      sellers: here.filter((p) => (p.categories ?? []).includes('Dealer')),
+      sellers: here.filter((p) => (p.categories ?? []).some((c) => c === 'Dealer' || c === 'Street Dealer')),
       users: here.filter((p) => (p.categories ?? []).includes('Drug User')),
       informants: data.informants.filter((i) => i.islandId === isl.id).length,
       reports: data.reports.filter((r) => r.islandId === isl.id).length,

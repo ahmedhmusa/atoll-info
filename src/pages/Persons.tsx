@@ -11,11 +11,12 @@ import { formatDate } from '../lib/util';
 import { displayName, displayCategories } from '../lib/personDisplay';
 import type { Person, PersonCategory, DrugType, FlagStatus } from '../types';
 
-const CATEGORIES: PersonCategory[] = ['Dealer', 'Drug User', 'Person of Interest'];
+const CATEGORIES: PersonCategory[] = ['Dealer', 'Street Dealer', 'Carrier', 'Drug User', 'Theft', 'Person of Interest'];
 const DRUG_TYPES: DrugType[] = ['Cocaine', 'Heroin', 'Cannabis', 'Party Drugs', 'Alcohol', 'Meth'];
 const FLAG_STATUSES: FlagStatus[] = ['None', 'Jailed', 'Faruvaa', 'On-Watch', 'On Investigation'];
 
-const categoryKind = (c: PersonCategory) => (c === 'Dealer' ? 'danger' : c === 'Drug User' ? 'accent' : 'neutral');
+const categoryKind = (c: PersonCategory) =>
+  c === 'Dealer' || c === 'Street Dealer' ? 'danger' : c === 'Drug User' ? 'accent' : c === 'Carrier' || c === 'Theft' ? 'warn' : 'neutral';
 const flagKind = (f: FlagStatus) => (f === 'Jailed' ? 'danger' : f === 'On-Watch' || f === 'On Investigation' ? 'accent' : f === 'Faruvaa' ? 'danger' : 'neutral');
 
 const Persons: React.FC = () => {

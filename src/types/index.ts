@@ -16,7 +16,7 @@ export interface Island {
   name: string;
 }
 
-export type PersonCategory = 'Dealer' | 'Drug User' | 'Person of Interest';
+export type PersonCategory = 'Dealer' | 'Street Dealer' | 'Carrier' | 'Drug User' | 'Theft' | 'Person of Interest';
 export type DrugType = 'Cocaine' | 'Heroin' | 'Cannabis' | 'Party Drugs' | 'Alcohol' | 'Meth';
 export type FlagStatus = 'None' | 'Jailed' | 'Faruvaa' | 'On-Watch' | 'On Investigation';
 

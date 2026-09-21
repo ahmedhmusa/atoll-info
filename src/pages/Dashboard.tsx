@@ -106,6 +106,7 @@ const Dashboard: React.FC = () => {
           <NetworkMesh persons={fp} onSelectPerson={(p) => navigate('/persons?category=' + encodeURIComponent((p.categories ?? [])[0] ?? ''))} />
           <div style={{ display: 'flex', gap: 14, justifyContent: 'center', marginTop: 10, fontSize: 11 }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--danger)', display: 'inline-block' }} /> Dealer</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--warn)', display: 'inline-block' }} /> Carrier/Theft</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} /> Drug User</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--text-dim)', display: 'inline-block' }} /> Other</span>
           </div>

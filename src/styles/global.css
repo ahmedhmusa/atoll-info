@@ -9,6 +9,7 @@
   --accent: #0f9488;
   --accent-text: #ffffff;
   --danger: #e0362e;
+  --warn: #c77700;
   --ok: #16a34a;
   --radius: 12px;
   --radius-lg: 18px;
@@ -30,6 +31,7 @@
     --accent: #2dd4bf;
     --accent-text: #062420;
     --danger: #ff6b6b;
+    --warn: #f5a524;
     --ok: #34d399;
   }
 }
@@ -140,6 +142,7 @@ body {
   display: inline-flex; align-items: center; font-size: 10.5px; font-weight: 700;
   padding: 3px 9px; border-radius: 999px; white-space: nowrap;
 }
+.badge-warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
 .badge-danger { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
 .badge-accent { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 .badge-ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
