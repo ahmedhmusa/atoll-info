@@ -4,27 +4,35 @@ import './styles/global.css';
 import App from './App.tsx';
 
 /**
- * iOS Safari's `dvh` unit is unreliable in standalone (installed) PWA mode
- * on some iOS versions — it can under-report the real visible screen
- * height, leaving a gap between the fixed-height app shell and the actual
- * bottom of the screen (the bottom nav then appears "floating" mid-screen,
- * and anything anchored below it, like a modal's action button, can end up
- * unreachable). This measures the *real* visible viewport directly via
- * `window.innerHeight` / `visualViewport` — which also correctly shrinks
- * when the on-screen keyboard appears — and exposes it as `--app-vh`,
- * which global.css uses instead of `dvh` for every full-height layout.
+ * Two separate viewport-height custom properties, because one value can't
+ * correctly serve both purposes:
+ *
+ * `--app-vh`  — the REAL full-screen height, from `window.innerHeight`.
+ *   Used for the app shell / bottom nav so they always reach the true
+ *   bottom edge of the screen. `dvh` alone is unreliable for this in
+ *   standalone (installed) PWA mode on some iOS versions — it can
+ *   under-report the screen height, leaving a visible gap below the nav
+ *   bar. This never shrinks for the on-screen keyboard, which is exactly
+ *   what we want here: the nav bar/shell shouldn't resize when a modal's
+ *   input is focused.
+ *
+ * `--visible-vh` — the currently VISIBLE height, from
+ *   `visualViewport.height`, which does shrink when the keyboard opens.
+ *   Used only by the modal sheet's max-height, so a form's Save button
+ *   stays scrollable into view above the keyboard instead of hiding
+ *   behind it.
  */
-function setAppViewportHeight() {
-  const vv = window.visualViewport;
-  const h = vv ? vv.height : window.innerHeight;
-  document.documentElement.style.setProperty('--app-vh', `${h * 0.01}px`);
+function setViewportHeights() {
+  document.documentElement.style.setProperty('--app-vh', `${window.innerHeight * 0.01}px`);
+  const visible = window.visualViewport?.height ?? window.innerHeight;
+  document.documentElement.style.setProperty('--visible-vh', `${visible * 0.01}px`);
 }
 
-setAppViewportHeight();
-window.addEventListener('resize', setAppViewportHeight);
-window.addEventListener('orientationchange', setAppViewportHeight);
-window.visualViewport?.addEventListener('resize', setAppViewportHeight);
-window.visualViewport?.addEventListener('scroll', setAppViewportHeight);
+setViewportHeights();
+window.addEventListener('resize', setViewportHeights);
+window.addEventListener('orientationchange', setViewportHeights);
+window.visualViewport?.addEventListener('resize', setViewportHeights);
+window.visualViewport?.addEventListener('scroll', setViewportHeights);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

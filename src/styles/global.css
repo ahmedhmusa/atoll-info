@@ -201,7 +201,7 @@ body {
 .modal-sheet {
   background: var(--card); width: 100%; max-width: 480px; border-radius: 22px 22px 0 0;
   max-height: 88dvh; /* fallback */
-  max-height: calc(var(--app-vh, 1vh) * 88);
+  max-height: calc(var(--visible-vh, 1vh) * 88);
   overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: var(--safe-bottom);
 }
 .modal-header { position: sticky; top: 0; background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
