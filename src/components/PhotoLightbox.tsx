@@ -1,11 +1,13 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
-const PhotoLightbox: React.FC<{ src: string; title?: string; onClose: () => void }> = ({ src, title, onClose }) => (
+const PhotoLightbox: React.FC<{ src: string; title?: string; onClose: () => void }> = ({ src, title, onClose }) =>
+  createPortal(
   <div
     onClick={onClose}
     style={{
-      position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.92)',
+      position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.92)',
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16,
     }}
   >
@@ -27,7 +29,8 @@ const PhotoLightbox: React.FC<{ src: string; title?: string; onClose: () => void
       onClick={(e) => e.stopPropagation()}
       style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 12, objectFit: 'contain' }}
     />
-  </div>
-);
+  </div>,
+  document.body
+  );
 
 export default PhotoLightbox;
