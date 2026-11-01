@@ -113,7 +113,7 @@ const InformantForm: React.FC<{ existing: Informant | null; onClose: () => void;
           A photo can reveal identity even with a code name on file — handle per your source-protection policy.
         </div>
       )}
-      <div className="field"><label>Code name *</label><input value={codeName} onChange={(e) => setCodeName(e.target.value)} placeholder="e.g. BLUE-HERON" autoFocus /></div>
+      <div className="field"><label>Code name *</label><input value={codeName} onChange={(e) => setCodeName(e.target.value)} placeholder="e.g. BLUE-HERON" /></div>
       <div className="field">
         <label>Island</label>
         <select value={islandId} onChange={(e) => setIslandId(e.target.value)}>

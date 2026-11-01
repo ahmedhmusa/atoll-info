@@ -35,9 +35,27 @@ export function categoryColor(c: string): string {
 }
 
 /** Nickname when there is one, otherwise the full name — shortened for small labels. */
-export function shortLabel(p: any, max = 14): string {
-  const label = (p.nickname ?? '').trim() || displayName(p);
-  return label.length > max ? label.slice(0, max - 1) + '…' : label;
+// Split into visible letters (graphemes), not code units: a Dhivehi letter is
+// a consonant plus its vowel mark (fili), so a plain .slice() cut names apart.
+function letters(s: string): string[] {
+  const Seg = (Intl as any).Segmenter;
+  if (Seg) return Array.from(new Seg(undefined, { granularity: 'grapheme' }).segment(s), (x: any) => x.segment as string);
+  const out: string[] = [];
+  for (const ch of Array.from(s)) {
+    if (out.length && /[\u0300-\u036f\u07a6-\u07b0\u064b-\u065f]/.test(ch)) out[out.length - 1] += ch;
+    else out.push(ch);
+  }
+  return out;
+}
+
+export function isRtl(s: string): boolean {
+  return /[\u0590-\u08ff]/.test(s);
+}
+
+export function shortLabel(p: any, max = 16): string {
+  const label = ((p.nickname ?? '').trim() || displayName(p)).trim();
+  const l = letters(label);
+  return l.length > max ? l.slice(0, max - 1).join('') + '…' : label;
 }
 
 // Rough position in the supply chain, used only to decide which way an

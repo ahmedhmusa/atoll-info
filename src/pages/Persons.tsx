@@ -230,7 +230,7 @@ const PersonForm: React.FC<{ existing: Person | null; onClose: () => void; onSav
       <PhotoField label="Full Photo" value={photoDataUrl} onChange={setPhotoDataUrl} maxDim={640} />
       <PhotoField label="ID Card Photo" value={idPhotoDataUrl} onChange={setIdPhotoDataUrl} maxDim={900} />
 
-      <div className="field"><label>Full Name *</label><input value={fullName} onChange={(e) => setFullName(e.target.value)} autoFocus /></div>
+      <div className="field"><label>Full Name *</label><input value={fullName} onChange={(e) => setFullName(e.target.value)} /></div>
       <div className="field"><label>Nick Name</label><input value={nickname} onChange={(e) => setNickname(e.target.value)} /></div>
       <div className="field"><label>ID Card Number</label><input value={idCardNumber} onChange={(e) => setIdCardNumber(e.target.value)} /></div>
       <div className="field"><label>Date of Birth</label><input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} /></div>

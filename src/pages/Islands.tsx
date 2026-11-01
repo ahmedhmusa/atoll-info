@@ -116,7 +116,7 @@ const IslandForm: React.FC<{ existing: Island | null; onClose: () => void; onSav
 
   return (
     <Modal title={existing ? 'Rename Island' : 'New Island'} onClose={onClose}>
-      <div className="field"><label>Island name *</label><input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></div>
+      <div className="field"><label>Island name *</label><input value={name} onChange={(e) => setName(e.target.value)} /></div>
       <button className="btn btn-primary" onClick={save}>Save Island</button>
     </Modal>
   );

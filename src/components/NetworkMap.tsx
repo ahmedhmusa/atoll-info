@@ -4,7 +4,7 @@ import { Plus, Minus, Maximize2, Minimize2, LocateFixed, Pencil, X } from 'lucid
 import type { Person, Island, PersonCategory } from '../types';
 import { useStore, touchRecord } from '../state/store';
 import {
-  displayCategories, shortLabel, displayName, personChainRank, categoryColor,
+  displayCategories, shortLabel, displayName, personChainRank, categoryColor, isRtl,
 } from '../lib/personDisplay';
 import Modal from './Modal';
 import Badge from './Badge';
@@ -45,7 +45,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
     };
     if (islandId) {
       const here = persons.filter((p) => p.islandId === islandId).sort(rankSort);
-      ring(here, W / 2, H / 2, here.length > 1 ? 105 : 0);
+      ring(here, W / 2, H / 2, here.length > 1 ? Math.min(Math.max(60, (here.length * 38) / (Math.PI * 2)), 120) : 0);
       const ids = new Set(here.map((p) => p.id));
       const ext = new Set<string>();
       here.forEach((p) => (p.linkedPersonIds ?? []).forEach((id) => { if (!ids.has(id) && byId.has(id)) ext.add(id); }));
@@ -59,7 +59,9 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
         const ang = (gi / Math.max(groups.length, 1)) * Math.PI * 2 - Math.PI / 2;
         const cx = W / 2 + Math.cos(ang) * (groups.length > 1 ? 120 : 0);
         const cy = H / 2 + Math.sin(ang) * (groups.length > 1 ? 120 : 0);
-        ring(g.list, cx, cy, g.list.length > 1 ? 14 + g.list.length * 4 : 0);
+        // ~38 units of circumference per person so labels don't collide
+        const want = g.list.length > 1 ? Math.max(26, (g.list.length * 38) / (Math.PI * 2)) : 0;
+        ring(g.list, cx, cy, groups.length > 1 ? Math.min(want, 70) : Math.min(want, 150));
       });
     }
     const pos = new Map(out.map((n) => [n.p.id, n]));
@@ -231,10 +233,17 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
                       d={`M${x} ${y} L${x + R * Math.cos(a0)} ${y + R * Math.sin(a0)} A${R} ${R} 0 ${large} 1 ${x + R * Math.cos(a1)} ${y + R * Math.sin(a1)} Z`} />
                   );
                 })}
-                <text x={x} y={y + R + 10 / Math.sqrt(view.k)} textAnchor="middle" fontSize={9 / Math.sqrt(view.k)} fill="var(--text)"
-                  style={{ pointerEvents: 'none', paintOrder: 'stroke', stroke: 'var(--card)', strokeWidth: 2.5 }}>
-                  {shortLabel(p)}
-                </text>
+                {(() => {
+                  const label = shortLabel(p);
+                  const fs = 10 / Math.sqrt(view.k);
+                  return (
+                    <text x={x} y={y + R + fs * 1.25} textAnchor="middle" fontSize={fs} fontWeight={600} fill="var(--text)"
+                      direction={isRtl(label) ? 'rtl' : 'ltr'}
+                      style={{ pointerEvents: 'none', unicodeBidi: 'plaintext', fontFamily: 'var(--font-ui), "Faruma", "MV Faseyha", "Noto Sans Thaana", sans-serif' }}>
+                      {label}
+                    </text>
+                  );
+                })()}
               </g>
             );
           })}

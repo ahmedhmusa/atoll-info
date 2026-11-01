@@ -55,7 +55,7 @@ const TaskForm: React.FC<{ onClose: () => void; onSave: (t: TaskItem) => void }>
 
   return (
     <Modal title="New Task" onClose={onClose}>
-      <div className="field"><label>Title *</label><input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus /></div>
+      <div className="field"><label>Title *</label><input value={title} onChange={(e) => setTitle(e.target.value)} /></div>
       <div className="field"><label>Due date</label><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></div>
       <div className="field">
         <label>Priority</label>
