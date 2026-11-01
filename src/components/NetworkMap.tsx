@@ -344,12 +344,13 @@ const EditNetwork: React.FC<{ person: Person; persons: Person[]; islands: Island
           const o = byId.get(id);
           if (!o) return null;
           return (
-            <div key={id} className="list-item" style={{ alignItems: 'center' }}>
-              <div className="li-main">
-                <div style={{ fontWeight: 600 }}>{displayName(o)}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{islandName(o.islandId)} · {displayCategories(o).join(', ') || '—'}</div>
+            <div key={id} className="net-row">
+              <div className="net-row-main">
+                <div className="net-row-name">{displayName(o)}</div>
+                <div className="net-row-sub">{islandName(o.islandId)} · {displayCategories(o).join(', ') || '—'}</div>
               </div>
-              <button type="button" className="btn btn-danger" onClick={() => setLinks((l) => l.filter((x) => x !== id))}>Remove</button>
+              <button type="button" className="net-mini net-mini-danger" aria-label="Remove connection"
+                onClick={() => setLinks((l) => l.filter((x) => x !== id))}><X size={16} /></button>
             </div>
           );
         })}
@@ -357,14 +358,15 @@ const EditNetwork: React.FC<{ person: Person; persons: Person[]; islands: Island
 
       <div className="field">
         <label>Add connection</label>
-        <input placeholder="Search name or nickname" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input style={{ marginBottom: 8 }} placeholder="Search name or nickname" value={q} onChange={(e) => setQ(e.target.value)} />
         {candidates.map((p) => (
-          <div key={p.id} className="list-item" style={{ alignItems: 'center' }}>
-            <div className="li-main">
-              <div style={{ fontWeight: 600 }}>{displayName(p)}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{islandName(p.islandId)} · {displayCategories(p).join(', ') || '—'}</div>
+          <div key={p.id} className="net-row">
+            <div className="net-row-main">
+              <div className="net-row-name">{displayName(p)}</div>
+              <div className="net-row-sub">{islandName(p.islandId)} · {displayCategories(p).join(', ') || '—'}</div>
             </div>
-            <button type="button" className="btn" onClick={() => setLinks((l) => [...l, p.id])}>Add</button>
+            <button type="button" className="net-mini" aria-label="Add connection"
+              onClick={() => setLinks((l) => [...l, p.id])}><Plus size={16} /></button>
           </div>
         ))}
       </div>
