@@ -9,3 +9,11 @@
 .net-full { position: relative; width: 100%; height: 100%; background: var(--card2); }
 .net-full .net-ctrl { top: calc(8px + env(safe-area-inset-top, 0px)); }
 .net-full .net-sheet { bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+.net-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 6px;
+  background: var(--card2); border: 1px solid var(--border); border-radius: 12px; }
+.net-row-main { flex: 1; min-width: 0; }
+.net-row-name { font-weight: 600; font-size: 15px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.net-row-sub { font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.net-mini { flex: 0 0 36px; width: 36px; height: 36px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: #fff; border: none; }
+.net-mini-danger { background: var(--danger); }
