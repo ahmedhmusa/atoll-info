@@ -153,11 +153,18 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
       gesture.current.dist = d;
     }
   };
+  // Taps are detected here rather than with onClick: while the map holds the
+  // touch (for panning), some browsers send the click to the map itself
+  // instead of the dot under the finger.
   const onUp = (e: React.PointerEvent) => {
+    const wasTap = pointers.current.size === 1 && !!gesture.current && gesture.current.moved < 8;
     pointers.current.delete(e.pointerId);
-    if (pointers.current.size === 0) setTimeout(() => { gesture.current = null; }, 0);
+    if (pointers.current.size === 0) gesture.current = null;
+    if (wasTap && e.type === 'pointerup') {
+      const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-pid]');
+      setSelected(hit ? hit.getAttribute('data-pid') : null);
+    }
   };
-  const tapped = () => !gesture.current || gesture.current.moved < 8;
 
   const reset = () => setView({ x: 0, y: 0, k: 1 });
   const focusSelected = () => {
@@ -177,7 +184,6 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
         viewBox={`0 0 ${W} ${H}`}
         style={{ width: '100%', height: full ? '100%' : undefined, maxWidth: full ? undefined : 480, aspectRatio: full ? undefined : '1 / 1', touchAction: 'none', display: 'block', margin: '0 auto', userSelect: 'none' }}
         onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
-        onClick={() => { if (tapped()) setSelected(null); }}
       >
         <defs>
           <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -210,8 +216,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
             const R = 11;
             const isSel = p.id === selected;
             return (
-              <g key={p.id} opacity={dim(p.id) ? 0.2 : 1} style={{ cursor: 'pointer' }}
-                onClick={(ev) => { ev.stopPropagation(); if (tapped()) setSelected(p.id); }}>
+              <g key={p.id} data-pid={p.id} opacity={dim(p.id) ? 0.2 : 1} style={{ cursor: 'pointer' }}>
                 <circle cx={x} cy={y} r={R + 8} fill="transparent" />
                 {outside && <circle cx={x} cy={y} r={R + 3} fill="none" stroke={ORANGE} strokeDasharray="3 2" strokeWidth={1.5} />}
                 {isSel && <circle cx={x} cy={y} r={R + 5} fill="none" stroke="var(--accent)" strokeWidth={2.5} />}

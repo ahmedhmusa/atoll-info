@@ -23,71 +23,53 @@ const Dashboard: React.FC = () => {
   const openTasks = data.tasks.filter((t) => !t.done);
   const recentReports = [...fr].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
 
-  const StatTile: React.FC<{ n: number; label: string; hint: string; color: string; Icon: React.ElementType; onClick: () => void }> = ({ n, label, hint, color, Icon, onClick }) => (
-    <button className="stat-tile" onClick={onClick} style={{ textAlign: 'left', cursor: 'pointer' }} title={hint}>
+  const StatTile: React.FC<{ n: number; label: string; color: string; Icon: React.ElementType; onClick: () => void }> = ({ n, label, color, Icon, onClick }) => (
+    <button className="stat-tile" onClick={onClick} aria-label={`${label}: ${n}`}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div className="num" style={{ color }}>{n}</div>
-        <Icon size={16} style={{ color, opacity: 0.85, marginTop: 2 }} />
+        <span className="tile-icon" style={{ background: color }}><Icon size={17} strokeWidth={2.4} /></span>
+        <div className="num">{n}</div>
       </div>
       <div className="label">{label}</div>
-      <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 3, lineHeight: 1.3 }}>{hint}</div>
     </button>
   );
+
+  const islandLabel = islandId ? data.islands.find((i) => i.id === islandId)?.name : 'All Islands';
 
   return (
     <div>
       <div className="section-title">Dashboard</div>
-      <div className="section-sub">{settings?.agencyLabel}</div>
+      <div className="section-sub">{settings?.agencyLabel || 'Tha Atoll'}</div>
 
       <div className="field">
-        <select value={islandId} onChange={(e) => setIslandId(e.target.value)}>
+        <select value={islandId} onChange={(e) => setIslandId(e.target.value)} aria-label="Island">
           <option value="">All Islands</option>
           {data.islands.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
         </select>
       </div>
 
-      <div className="stat-grid" style={{ marginBottom: 10 }}>
-        <StatTile
-          n={dealers.length} label="Dealers" hint="Persons tagged as Dealer" color="var(--danger)" Icon={ShieldAlert}
-          onClick={() => navigate('/persons?category=' + encodeURIComponent('Dealer'))}
-        />
-        <StatTile
-          n={drugUsers.length} label="Drug Users" hint="Persons tagged as Drug User" color="var(--accent)" Icon={UserX}
-          onClick={() => navigate('/persons?category=' + encodeURIComponent('Drug User'))}
-        />
-        <StatTile
-          n={fi.length} label="Informants" hint="Confidential sources on record" color="var(--text)" Icon={Radio}
-          onClick={() => navigate('/informants')}
-        />
-        <StatTile
-          n={fr.length} label="Reports" hint="All intelligence reports logged" color="var(--text)" Icon={FileText}
-          onClick={() => navigate('/reports')}
-        />
-      </div>
-      <div className="stat-grid">
-        <StatTile
-          n={fp.length} label="Total Persons" hint="Every person record, any category" color="var(--text)" Icon={Users}
-          onClick={() => navigate('/persons')}
-        />
-        <StatTile
-          n={openTasks.length} label="Open Tasks" hint="Follow-ups not yet marked done" color="var(--text)" Icon={CheckSquare}
-          onClick={() => navigate('/tasks')}
-        />
+      <div className="stat-grid" style={{ marginBottom: 16 }}>
+        <StatTile n={dealers.length} label="Dealers" color="var(--danger)" Icon={ShieldAlert}
+          onClick={() => navigate('/persons?category=' + encodeURIComponent('Dealer'))} />
+        <StatTile n={drugUsers.length} label="Drug Users" color="var(--accent)" Icon={UserX}
+          onClick={() => navigate('/persons?category=' + encodeURIComponent('Drug User'))} />
+        <StatTile n={fp.length} label="All Persons" color="var(--indigo)" Icon={Users} onClick={() => navigate('/persons')} />
+        <StatTile n={fi.length} label="Informants" color="var(--ok)" Icon={Radio} onClick={() => navigate('/informants')} />
+        <StatTile n={fr.length} label="Reports" color="var(--purple)" Icon={FileText} onClick={() => navigate('/reports')} />
+        <StatTile n={openTasks.length} label="Open Tasks" color="var(--warn)" Icon={CheckSquare} onClick={() => navigate('/tasks')} />
       </div>
 
-      <div className="card" style={{ marginTop: 12 }}>
-        <div className="card-title">Recent Reports</div>
-        {recentReports.length === 0 && <div className="empty-state">No reports yet.</div>}
-        {recentReports.map((r) => (
-          <Link key={r.id} to="/reports" className="list-item">
-            <div className="li-main"><div className="li-title">{r.title}</div><div className="li-sub">{formatDate(r.date)}</div></div>
-            <Badge text={r.status} kind={r.status === 'Open' ? 'accent' : 'ok'} />
-          </Link>
-        ))}
+      <div className="card-title">Drug Network · {islandLabel}</div>
+      <div className="card" style={{ padding: 8 }}>
+        <NetworkMap persons={data.persons} islands={data.islands} islandId={islandId} />
       </div>
 
-      <div className="card">
-        <div className="card-title">Open Tasks</div>
+      <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginRight: 4 }}>
+        <span>Open Tasks</span>
+        <button className="btn-ghost" onClick={() => setAdding(true)} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontSize: 15, fontWeight: 600, textTransform: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, padding: 0 }}>
+          <Plus size={17} strokeWidth={2.5} /> Add
+        </button>
+      </div>
+      <div className="card" style={{ padding: 8 }}>
         {openTasks.length === 0 && <div className="empty-state">No open tasks.</div>}
         {openTasks.slice(0, 5).map((t) => (
           <Link key={t.id} to="/tasks" className="list-item">
@@ -95,17 +77,17 @@ const Dashboard: React.FC = () => {
             <Badge text={t.priority} kind={t.priority === 'High' ? 'danger' : 'neutral'} />
           </Link>
         ))}
-        <button className="btn btn-primary" style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => setAdding(true)}>
-          <Plus size={16} strokeWidth={2.5} /> Add Task
-        </button>
       </div>
 
-      <div className="card">
-        <div className="card-title">Drug Network — {islandId ? data.islands.find((i) => i.id === islandId)?.name : 'All Islands'}</div>
-        <NetworkMap persons={data.persons} islands={data.islands} islandId={islandId} />
-        <div className="field-hint" style={{ textAlign: 'center', marginTop: 6 }}>
-          Lines come from each person's "Linked Persons" (set in their Edit form). Tap a dot for details.
-        </div>
+      <div className="card-title">Recent Reports</div>
+      <div className="card" style={{ padding: 8 }}>
+        {recentReports.length === 0 && <div className="empty-state">No reports yet.</div>}
+        {recentReports.map((r) => (
+          <Link key={r.id} to="/reports" className="list-item">
+            <div className="li-main"><div className="li-title">{r.title}</div><div className="li-sub">{formatDate(r.date)}</div></div>
+            <Badge text={r.status} kind={r.status === 'Open' ? 'accent' : 'ok'} />
+          </Link>
+        ))}
       </div>
 
       {adding && <QuickTaskForm onClose={() => setAdding(false)} onSave={async (t) => { await upsert('tasks', t); setAdding(false); }} />}
