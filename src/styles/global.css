@@ -377,6 +377,12 @@ button:disabled { opacity: 0.45; }
 
 /* ---------- interactive drug network ---------- */
 .net-wrap { position: relative; border-radius: 20px; overflow: hidden; background: var(--card2); }
+.net-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.net-label {
+  position: absolute; transform: translateX(-50%); white-space: nowrap; line-height: 1.25;
+  color: var(--text); text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg);
+  max-width: 120px; overflow: hidden; text-overflow: ellipsis;
+}
 .net-ctrl { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 8px; }
 .net-ctrl .icon-btn { width: 40px; min-width: 40px; height: 40px; padding: 0; }
 .net-sheet {

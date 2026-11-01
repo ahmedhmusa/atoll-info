@@ -4,7 +4,7 @@ import { Plus, Minus, Maximize2, Minimize2, LocateFixed, Pencil, X } from 'lucid
 import type { Person, Island, PersonCategory } from '../types';
 import { useStore, touchRecord } from '../state/store';
 import {
-  displayCategories, shortLabel, displayName, personChainRank, categoryColor, isRtl,
+  displayCategories, shortLabel, displayName, personChainRank, categoryColor,
 } from '../lib/personDisplay';
 import Modal from './Modal';
 import Badge from './Badge';
@@ -27,6 +27,14 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
   const [editing, setEditing] = useState(false);
   const [full, setFull] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const [box, setBox] = useState({ w: W, h: H });
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => { const r = el.getBoundingClientRect(); setBox({ w: r.width, h: r.height }); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [full]);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<{ moved: number; dist: number; k: number } | null>(null);
 
@@ -181,10 +189,11 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
 
   const canvas = (
     <div className={full ? 'net-full' : 'net-wrap'}>
+      <div style={{ position: 'relative', width: '100%', height: full ? '100%' : undefined, maxWidth: full ? undefined : 480, aspectRatio: full ? undefined : '1 / 1', margin: '0 auto' }}>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
-        style={{ width: '100%', height: full ? '100%' : undefined, maxWidth: full ? undefined : 480, aspectRatio: full ? undefined : '1 / 1', touchAction: 'none', display: 'block', margin: '0 auto', userSelect: 'none' }}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', touchAction: 'none', display: 'block', userSelect: 'none' }}
         onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
       >
         <defs>
@@ -233,17 +242,6 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
                       d={`M${x} ${y} L${x + R * Math.cos(a0)} ${y + R * Math.sin(a0)} A${R} ${R} 0 ${large} 1 ${x + R * Math.cos(a1)} ${y + R * Math.sin(a1)} Z`} />
                   );
                 })}
-                {(() => {
-                  const label = shortLabel(p);
-                  const fs = 10 / Math.sqrt(view.k);
-                  return (
-                    <text x={x} y={y + R + fs * 1.25} textAnchor="middle" fontSize={fs} fontWeight={600} fill="var(--text)"
-                      direction={isRtl(label) ? 'rtl' : 'ltr'}
-                      style={{ pointerEvents: 'none', unicodeBidi: 'plaintext', fontFamily: 'var(--font-ui), "Faruma", "MV Faseyha", "Noto Sans Thaana", sans-serif' }}>
-                      {label}
-                    </text>
-                  );
-                })()}
               </g>
             );
           })}
@@ -260,6 +258,27 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
           })()}
         </g>
       </svg>
+      {/* Names are normal HTML text (same rendering as the Persons list) so
+          Dhivehi right-to-left script displays correctly on iPhone. */}
+      <div className="net-labels" aria-hidden="true">
+        {(() => {
+          const sc = Math.min(box.w, box.h) / W;
+          const ox = (box.w - W * sc) / 2, oy = (box.h - H * sc) / 2;
+          const fs = Math.max(12, Math.min(17, 12 * Math.sqrt(view.k) * sc));
+          return nodes.map(({ p, x, y }) => {
+            const sx = ox + (view.x + x * view.k) * sc;
+            const sy = oy + (view.y + y * view.k) * sc + 11 * view.k * sc + 2;
+            if (sx < -60 || sx > box.w + 60 || sy < -20 || sy > box.h + 20) return null;
+            return (
+              <div key={p.id} dir="auto" className="net-label"
+                style={{ left: sx, top: sy, fontSize: fs, opacity: dim(p.id) ? 0.2 : 1, fontWeight: p.id === selected ? 700 : 600 }}>
+                {shortLabel(p)}
+              </div>
+            );
+          });
+        })()}
+      </div>
+      </div>
 
       <div className="net-ctrl">
         <button className="icon-btn" aria-label="Zoom in" onClick={() => zoomAt(1.4)}><Plus size={18} /></button>
