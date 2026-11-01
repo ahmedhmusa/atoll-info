@@ -1,216 +1,379 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Plus, Minus, Maximize2, Minimize2, LocateFixed, Pencil, X } from 'lucide-react';
+import type { Person, Island, PersonCategory } from '../types';
+import { useStore, touchRecord } from '../state/store';
+import {
+  displayCategories, shortLabel, displayName, personChainRank, categoryColor,
+} from '../lib/personDisplay';
 import Modal from './Modal';
 import Badge from './Badge';
-import { displayName, displayCategories, categoryColor, shortLabel, personChainRank, CATEGORY_COLORS } from '../lib/personDisplay';
-import type { Person, Island } from '../types';
 
-interface Props {
-  persons: Person[];
-  islands: Island[];
-  /** When set, only that island's people are drawn (plus anyone they link to on other islands). */
-  islandId: string;
-}
+const W = 360;
+const H = 360;
+const MIN_K = 0.6;
+const MAX_K = 6;
+const ALL_CATEGORIES: PersonCategory[] = ['Dealer', 'Street Dealer', 'Carrier', 'Drug User', 'Theft', 'Person of Interest'];
+const RED = '#e0362e';
+const ORANGE = '#e0a53d';
 
-interface Node { p: Person; x: number; y: number; }
+interface Node { p: Person; x: number; y: number; outside?: boolean }
+interface Edge { a: string; b: string; from?: string; to?: string; color: string; cross: boolean }
+interface View { x: number; y: number; k: number }
 
-/**
- * Draws people as dots and their "Linked Persons" as lines.
- * - One island selected: that island's people in a ring, plus anyone on
- *   OTHER islands they're linked to, shown outside the ring.
- * - All islands: each island is its own cluster, arranged around a big
- *   circle; links between islands are drawn dashed.
- * Each dot is split into colored slices — one per category the person has —
- * so any category edit is visible straight away.
- */
-const NetworkMap: React.FC<Props> = ({ persons, islands, islandId }) => {
-  const [sel, setSel] = useState<Person | null>(null);
-  const islandName = (id: string) => islands.find((i) => i.id === id)?.name ?? '—';
-  const byId = useMemo(() => new Map(persons.map((p) => [p.id, p])), [persons]);
+const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: string }> = ({ persons, islands, islandId }) => {
+  const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 });
+  const [selected, setSelected] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [full, setFull] = useState(false);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef<{ moved: number; dist: number; k: number } | null>(null);
 
-  const layout = useMemo(() => {
-    const nodes: Node[] = [];
-    const labels: { text: string; x: number; y: number }[] = [];
-    const size = islandId ? 300 : 360;
-    const c = size / 2;
+  const islandName = (id: string) => islands.find((i) => i.id === id)?.name ?? '';
 
+  // ---------- layout ----------
+  const { nodes, edges } = useMemo(() => {
+    const byId = new Map(persons.map((p) => [p.id, p]));
+    const rankSort = (a: Person, b: Person) => (personChainRank(a) ?? 9) - (personChainRank(b) ?? 9);
+    const out: Node[] = [];
+    const ring = (list: Person[], cx: number, cy: number, r: number, outside?: boolean) => {
+      list.forEach((p, i) => {
+        const ang = (i / Math.max(list.length, 1)) * Math.PI * 2 - Math.PI / 2;
+        out.push({ p, x: cx + Math.cos(ang) * r, y: cy + Math.sin(ang) * r, outside });
+      });
+    };
     if (islandId) {
-      const core = persons.filter((p) => p.islandId === islandId);
-      const coreIds = new Set(core.map((p) => p.id));
-      // people elsewhere who are linked (either direction) to someone on this island
-      const outside = persons.filter((p) => !coreIds.has(p.id) && (
-        (p.linkedPersonIds ?? []).some((id) => coreIds.has(id)) ||
-        core.some((q) => (q.linkedPersonIds ?? []).includes(p.id))
-      ));
-      const r = core.length <= 1 ? 0 : size * 0.3;
-      core.forEach((p, i) => {
-        const a = (i / Math.max(core.length, 1)) * 2 * Math.PI - Math.PI / 2;
-        nodes.push({ p, x: c + r * Math.cos(a), y: c + r * Math.sin(a) });
+      const here = persons.filter((p) => p.islandId === islandId).sort(rankSort);
+      ring(here, W / 2, H / 2, here.length > 1 ? 105 : 0);
+      const ids = new Set(here.map((p) => p.id));
+      const ext = new Set<string>();
+      here.forEach((p) => (p.linkedPersonIds ?? []).forEach((id) => { if (!ids.has(id) && byId.has(id)) ext.add(id); }));
+      persons.forEach((p) => { if (!ids.has(p.id) && (p.linkedPersonIds ?? []).some((id) => ids.has(id))) ext.add(p.id); });
+      ring([...ext].map((id) => byId.get(id)!), W / 2, H / 2, 165, true);
+    } else {
+      const groups = islands
+        .map((i) => ({ i, list: persons.filter((p) => p.islandId === i.id).sort(rankSort) }))
+        .filter((g) => g.list.length > 0);
+      groups.forEach((g, gi) => {
+        const ang = (gi / Math.max(groups.length, 1)) * Math.PI * 2 - Math.PI / 2;
+        const cx = W / 2 + Math.cos(ang) * (groups.length > 1 ? 120 : 0);
+        const cy = H / 2 + Math.sin(ang) * (groups.length > 1 ? 120 : 0);
+        ring(g.list, cx, cy, g.list.length > 1 ? 14 + g.list.length * 4 : 0);
       });
-      outside.forEach((p, i) => {
-        const a = (i / outside.length) * 2 * Math.PI - Math.PI / 2 + 0.3;
-        nodes.push({ p, x: c + size * 0.45 * Math.cos(a), y: c + size * 0.45 * Math.sin(a) });
-      });
-      return { nodes, labels, size };
     }
-
-    // All islands: one cluster per island that has people
-    const groups = islands
-      .map((isl) => ({ isl, people: persons.filter((p) => p.islandId === isl.id) }))
-      .filter((g) => g.people.length > 0);
-    const orphans = persons.filter((p) => !islands.some((i) => i.id === p.islandId));
-    if (orphans.length) groups.push({ isl: { id: '_none', name: 'No island' } as Island, people: orphans });
-
-    const bigR = groups.length <= 1 ? 0 : size * 0.33;
-    groups.forEach((g, gi) => {
-      const ga = (gi / groups.length) * 2 * Math.PI - Math.PI / 2;
-      const gx = c + bigR * Math.cos(ga);
-      const gy = c + bigR * Math.sin(ga);
-      const smallR = g.people.length <= 1 ? 0 : Math.min(size * 0.12, 10 + g.people.length * 4);
-      g.people.forEach((p, i) => {
-        const a = (i / g.people.length) * 2 * Math.PI - Math.PI / 2;
-        nodes.push({ p, x: gx + smallR * Math.cos(a), y: gy + smallR * Math.sin(a) });
-      });
-      const ly = gy - smallR - 16;
-      labels.push({ text: g.isl.name, x: gx, y: ly < 12 ? gy + smallR + 26 : ly });
-    });
-    return { nodes, labels, size };
+    const pos = new Map(out.map((n) => [n.p.id, n]));
+    const seen = new Set<string>();
+    const es: Edge[] = [];
+    out.forEach(({ p }) => (p.linkedPersonIds ?? []).forEach((tid) => {
+      const t = pos.get(tid);
+      if (!t || tid === p.id) return;
+      const key = [p.id, tid].sort().join('|');
+      if (seen.has(key)) return;
+      seen.add(key);
+      const ra = personChainRank(p), rb = personChainRank(t.p);
+      let from: string | undefined, to: string | undefined, color = '#8a8f98';
+      if (ra !== null && rb !== null && ra !== rb) {
+        const aUp = ra < rb;
+        from = aUp ? p.id : tid; to = aUp ? tid : p.id;
+        color = Math.min(ra, rb) === 0 ? RED : ORANGE;
+      }
+      es.push({ a: p.id, b: tid, from, to, color, cross: p.islandId !== t.p.islandId });
+    }));
+    return { nodes: out, edges: es };
   }, [persons, islands, islandId]);
 
-  const pos = new Map(layout.nodes.map((n) => [n.p.id, n]));
-  // Direction is inferred from each person's supply-chain position (Dealer
-  // → Street Dealer/Carrier → Drug User), not stored explicitly — a link
-  // between two ranked-but-different roles gets an arrow from the more
-  // upstream person to the more downstream one, colored by how far
-  // upstream the source is. Same-level or unranked pairs stay as plain
-  // undirected lines, since direction genuinely isn't known there.
-  type Edge = { a: Node; b: Node; cross: boolean; directed: boolean; color: string; marker?: string };
-  const edges: Edge[] = [];
-  const seen = new Set<string>();
-  for (const n of layout.nodes) {
-    for (const id of n.p.linkedPersonIds ?? []) {
-      const m = pos.get(id);
-      if (!m) continue;
-      const key = [n.p.id, id].sort().join('|');
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const cross = n.p.islandId !== m.p.islandId;
-      const rN = personChainRank(n.p);
-      const rM = personChainRank(m.p);
-      if (rN !== null && rM !== null && rN !== rM) {
-        const [up, down] = rN < rM ? [n, m] : [m, n];
-        const color = (rN < rM ? rN : rM) === 0 ? '#e0362e' : '#e0a53d';
-        const marker = (rN < rM ? rN : rM) === 0 ? 'url(#arrow-red)' : 'url(#arrow-orange)';
-        edges.push({ a: up, b: down, cross, directed: true, color, marker });
-      } else {
-        edges.push({ a: n, b: m, cross, directed: false, color: 'var(--text-faint)' });
-      }
-    }
-  }
+  const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.p.id, n])), [nodes]);
+  const neighbours = useMemo(() => {
+    const s = new Set<string>();
+    if (!selected) return s;
+    edges.forEach((e) => { if (e.a === selected) s.add(e.b); if (e.b === selected) s.add(e.a); });
+    return s;
+  }, [edges, selected]);
 
-  if (layout.nodes.length === 0) return <div className="empty-state">No persons to show yet.</div>;
+  useEffect(() => { if (selected && !nodeMap.has(selected)) setSelected(null); }, [nodeMap, selected]);
+  useEffect(() => { setView({ x: 0, y: 0, k: 1 }); setSelected(null); }, [islandId]);
 
-  const R = islandId ? 9 : 7;
-  const dot = (n: Node) => {
-    const cats = displayCategories(n.p);
-    const colors = cats.length ? cats.map(categoryColor) : ['var(--text-dim)'];
-    if (colors.length === 1) return <circle cx={n.x} cy={n.y} r={R} fill={colors[0]} />;
-    return colors.map((col, i) => {
-      const a0 = (i / colors.length) * 2 * Math.PI - Math.PI / 2;
-      const a1 = ((i + 1) / colors.length) * 2 * Math.PI - Math.PI / 2;
-      const large = a1 - a0 > Math.PI ? 1 : 0;
-      const d = `M ${n.x} ${n.y} L ${n.x + R * Math.cos(a0)} ${n.y + R * Math.sin(a0)} A ${R} ${R} 0 ${large} 1 ${n.x + R * Math.cos(a1)} ${n.y + R * Math.sin(a1)} Z`;
-      return <path key={i} d={d} fill={col} />;
+  // ---------- zoom / pan ----------
+  const unit = () => {
+    const r = svgRef.current!.getBoundingClientRect();
+    return { r, s: W / Math.min(r.width, r.height) };
+  };
+  const toView = (cx: number, cy: number) => {
+    const { r, s } = unit();
+    return { x: (cx - r.left - r.width / 2) * s + W / 2, y: (cy - r.top - r.height / 2) * s + H / 2 };
+  };
+  const zoomAt = (factor: number, fx = W / 2, fy = H / 2) => {
+    setView((v) => {
+      const k = Math.min(MAX_K, Math.max(MIN_K, v.k * factor));
+      const f = k / v.k;
+      return { k, x: fx - (fx - v.x) * f, y: fy - (fy - v.y) * f };
     });
   };
 
-  // Shorten the visible line so a directed edge's arrowhead sits at the
-  // edge of the destination dot instead of being drawn under it.
-  const shorten = (e: Edge) => {
-    if (!e.directed) return { x1: e.a.x, y1: e.a.y, x2: e.b.x, y2: e.b.y };
-    const dx = e.b.x - e.a.x, dy = e.b.y - e.a.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const pad = R + 4;
-    return { x1: e.a.x, y1: e.a.y, x2: e.b.x - (dx / len) * pad, y2: e.b.y - (dy / len) * pad };
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const f = toView(e.clientX, e.clientY);
+      zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, f.x, f.y);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  });
+
+  const onDown = (e: React.PointerEvent) => {
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pts = [...pointers.current.values()];
+    gesture.current = {
+      moved: 0, k: view.k,
+      dist: pts.length === 2 ? Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) : 0,
+    };
+  };
+  const onMove = (e: React.PointerEvent) => {
+    const prev = pointers.current.get(e.pointerId);
+    if (!prev || !gesture.current) return;
+    const cur = { x: e.clientX, y: e.clientY };
+    pointers.current.set(e.pointerId, cur);
+    const pts = [...pointers.current.values()];
+    const { s } = unit();
+    if (pts.length === 1) {
+      const dx = (cur.x - prev.x) * s, dy = (cur.y - prev.y) * s;
+      gesture.current.moved += Math.abs(cur.x - prev.x) + Math.abs(cur.y - prev.y);
+      setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
+    } else if (pts.length === 2) {
+      const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      gesture.current.moved += 10;
+      if (gesture.current.dist > 0) {
+        const mid = toView((pts[0].x + pts[1].x) / 2, (pts[0].y + pts[1].y) / 2);
+        zoomAt(d / gesture.current.dist, mid.x, mid.y);
+      }
+      gesture.current.dist = d;
+    }
+  };
+  const onUp = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size === 0) setTimeout(() => { gesture.current = null; }, 0);
+  };
+  const tapped = () => !gesture.current || gesture.current.moved < 8;
+
+  const reset = () => setView({ x: 0, y: 0, k: 1 });
+  const focusSelected = () => {
+    const n = selected ? nodeMap.get(selected) : null;
+    if (!n) return;
+    const k = 2.2;
+    setView({ k, x: W / 2 - n.x * k, y: H / 2 - n.y * k });
   };
 
-  return (
-    <>
-      <svg viewBox={`0 0 ${layout.size} ${layout.size}`} width="100%" style={{ maxWidth: 360, display: 'block', margin: '0 auto' }}>
+  const sel = selected ? nodeMap.get(selected)?.p ?? null : null;
+  const dim = (id: string) => !!selected && id !== selected && !neighbours.has(id);
+
+  const canvas = (
+    <div className={full ? 'net-full' : 'net-wrap'}>
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        style={{ width: '100%', height: full ? '100%' : undefined, maxWidth: full ? undefined : 480, aspectRatio: full ? undefined : '1 / 1', touchAction: 'none', display: 'block', margin: '0 auto', userSelect: 'none' }}
+        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
+        onClick={() => { if (tapped()) setSelected(null); }}
+      >
         <defs>
-          <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#e0362e" />
+          <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill={RED} />
           </marker>
-          <marker id="arrow-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#e0a53d" />
+          <marker id="arrow-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill={ORANGE} />
           </marker>
         </defs>
-        {edges.map((e, i) => {
-          const { x1, y1, x2, y2 } = shorten(e);
-          return (
-            <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke={e.color} strokeWidth={e.directed ? 1.8 : 1.3}
-              strokeDasharray={!e.directed ? '3 3' : e.cross ? '6 3' : undefined}
-              markerEnd={e.marker} opacity={e.directed ? 0.95 : 0.6} />
-          );
-        })}
-        {layout.labels.map((l, i) => (
-          <text key={i} x={l.x} y={l.y} textAnchor="middle" fontSize="9.5" fontWeight={700} fill="var(--text)">{l.text}</text>
-        ))}
-        {layout.nodes.map((n) => (
-          <g key={n.p.id} onClick={() => setSel(n.p)} style={{ cursor: 'pointer' }}>
-            {dot(n)}
-            <circle cx={n.x} cy={n.y} r={R} fill="none" stroke="var(--card)" strokeWidth={1.5} />
-            {islandId && n.p.islandId !== islandId && (
-              <circle cx={n.x} cy={n.y} r={R + 3} fill="none" stroke="var(--warn)" strokeWidth={1} strokeDasharray="2 2" />
-            )}
-            <text x={n.x} y={n.y + R + 9} textAnchor="middle" fontSize="7.5" fill="var(--text-dim)">{shortLabel(n.p)}</text>
-          </g>
-        ))}
+        <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
+          {edges.map((e, i) => {
+            const A = nodeMap.get(e.from ?? e.a)!, B = nodeMap.get(e.to ?? e.b)!;
+            let x2 = B.x, y2 = B.y;
+            if (e.from) {
+              const dx = B.x - A.x, dy = B.y - A.y, len = Math.hypot(dx, dy) || 1;
+              x2 = B.x - (dx / len) * 12; y2 = B.y - (dy / len) * 12;
+            }
+            const hot = !!selected && (e.a === selected || e.b === selected);
+            const faded = !!selected && !hot;
+            return (
+              <line key={i} x1={A.x} y1={A.y} x2={x2} y2={y2} stroke={e.color}
+                strokeWidth={(hot ? 3 : 1.8) / Math.sqrt(view.k)}
+                strokeDasharray={e.cross || !e.from ? '6 3' : undefined}
+                opacity={faded ? 0.12 : 0.9}
+                markerEnd={e.from ? (e.color === RED ? 'url(#arrow-red)' : 'url(#arrow-orange)') : undefined} />
+            );
+          })}
+          {nodes.map(({ p, x, y, outside }) => {
+            const cats = displayCategories(p);
+            const R = 11;
+            const isSel = p.id === selected;
+            return (
+              <g key={p.id} opacity={dim(p.id) ? 0.2 : 1} style={{ cursor: 'pointer' }}
+                onClick={(ev) => { ev.stopPropagation(); if (tapped()) setSelected(p.id); }}>
+                <circle cx={x} cy={y} r={R + 8} fill="transparent" />
+                {outside && <circle cx={x} cy={y} r={R + 3} fill="none" stroke={ORANGE} strokeDasharray="3 2" strokeWidth={1.5} />}
+                {isSel && <circle cx={x} cy={y} r={R + 5} fill="none" stroke="var(--accent)" strokeWidth={2.5} />}
+                {cats.length <= 1 ? (
+                  <circle cx={x} cy={y} r={R} fill={cats[0] ? categoryColor(cats[0]) : 'var(--text-dim)'} stroke="var(--card)" strokeWidth={1.5} />
+                ) : cats.map((c, i) => {
+                  const a0 = (i / cats.length) * Math.PI * 2 - Math.PI / 2;
+                  const a1 = ((i + 1) / cats.length) * Math.PI * 2 - Math.PI / 2;
+                  const large = a1 - a0 > Math.PI ? 1 : 0;
+                  return (
+                    <path key={c} fill={categoryColor(c)} stroke="var(--card)" strokeWidth={1}
+                      d={`M${x} ${y} L${x + R * Math.cos(a0)} ${y + R * Math.sin(a0)} A${R} ${R} 0 ${large} 1 ${x + R * Math.cos(a1)} ${y + R * Math.sin(a1)} Z`} />
+                  );
+                })}
+                <text x={x} y={y + R + 10 / Math.sqrt(view.k)} textAnchor="middle" fontSize={9 / Math.sqrt(view.k)} fill="var(--text)"
+                  style={{ pointerEvents: 'none', paintOrder: 'stroke', stroke: 'var(--card)', strokeWidth: 2.5 }}>
+                  {shortLabel(p)}
+                </text>
+              </g>
+            );
+          })}
+          {!islandId && (() => {
+            const seenI = new Set<string>();
+            return nodes.map(({ p, x, y }) => {
+              if (seenI.has(p.islandId)) return null;
+              seenI.add(p.islandId);
+              return (
+                <text key={'l' + p.islandId} x={x} y={y - 24} textAnchor="middle" fontSize={10 / Math.sqrt(view.k)} fontWeight={700}
+                  fill="var(--text-dim)" style={{ pointerEvents: 'none' }}>{islandName(p.islandId)}</text>
+              );
+            });
+          })()}
+        </g>
       </svg>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px', justifyContent: 'center', marginTop: 10, fontSize: 11 }}>
-        {Object.entries(CATEGORY_COLORS).map(([name, col]) => (
-          <span key={name} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: col, display: 'inline-block' }} /> {name}
-          </span>
-        ))}
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', justifyContent: 'center', marginTop: 8, fontSize: 10.5, color: 'var(--text-dim)' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <svg width="20" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="#e0362e" strokeWidth="1.8" /><path d="M16 1 L20 4 L16 7 z" fill="#e0362e" /></svg> Dealer supplies
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <svg width="20" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="#e0a53d" strokeWidth="1.8" /><path d="M16 1 L20 4 L16 7 z" fill="#e0a53d" /></svg> Street/Carrier supplies
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="var(--text-faint)" strokeWidth="1.3" strokeDasharray="3 3" /></svg> Same level / unclear
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <span style={{ width: 12, height: 12, borderRadius: '50%', border: '1px dashed var(--warn)', display: 'inline-block' }} /> On another island
-        </span>
+      <div className="net-ctrl">
+        <button className="icon-btn" aria-label="Zoom in" onClick={() => zoomAt(1.4)}><Plus size={18} /></button>
+        <button className="icon-btn" aria-label="Zoom out" onClick={() => zoomAt(1 / 1.4)}><Minus size={18} /></button>
+        <button className="icon-btn" aria-label="Reset view" onClick={reset}><LocateFixed size={18} /></button>
+        <button className="icon-btn" aria-label={full ? 'Exit full screen' : 'Full screen'} onClick={() => setFull((f) => !f)}>
+          {full ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+        </button>
       </div>
 
       {sel && (
-        <Modal title={displayName(sel)} onClose={() => setSel(null)}>
-          {sel.nickname && <div className="section-sub" style={{ margin: 0 }}>"{sel.nickname}"</div>}
-          <div className="section-sub">{islandName(sel.islandId)}</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-            {displayCategories(sel).map((c) => <Badge key={c} text={c} kind="neutral" />)}
+        <div className="net-sheet">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName(sel)}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+              {islandName(sel.islandId)} · {neighbours.size} connection{neighbours.size === 1 ? '' : 's'}
+            </div>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+              {displayCategories(sel).map((c) => <Badge key={c} text={c} />)}
+            </div>
           </div>
-          <div className="card-title">Linked Persons</div>
-          {(sel.linkedPersonIds ?? []).filter((id) => byId.has(id)).length === 0 && <div className="field-hint">No linked persons.</div>}
-          {(sel.linkedPersonIds ?? []).map((id) => {
-            const q = byId.get(id);
-            if (!q) return null;
-            return (
-              <div key={id} className="list-item" style={{ cursor: 'pointer' }} onClick={() => setSel(q)}>
-                <div className="li-main"><div className="li-title">{displayName(q)}</div><div className="li-sub">{islandName(q.islandId)}</div></div>
-              </div>
-            );
-          })}
-        </Modal>
+          <button className="btn" onClick={focusSelected}>Focus</button>
+          <button className="btn btn-primary" onClick={() => setEditing(true)}><Pencil size={14} /> Edit</button>
+          <button className="icon-btn" aria-label="Clear selection" onClick={() => setSelected(null)}><X size={16} /></button>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      {full ? createPortal(<div className="net-full-overlay">{canvas}</div>, document.body) : canvas}
+      <div className="field-hint" style={{ marginTop: 6 }}>
+        Pinch or use +/− to zoom, drag to move. Tap a person to highlight their connections, then Edit.
+      </div>
+      {editing && sel && (
+        <EditNetwork person={sel} persons={persons} islands={islands} onClose={() => setEditing(false)} />
       )}
     </>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Editable network sheet: categories + connections for one person.
+// ---------------------------------------------------------------------------
+const EditNetwork: React.FC<{ person: Person; persons: Person[]; islands: Island[]; onClose: () => void }> = ({ person, persons, islands, onClose }) => {
+  const { upsert } = useStore();
+  const [cats, setCats] = useState<PersonCategory[]>(displayCategories(person));
+  const [links, setLinks] = useState<string[]>(() => {
+    const s = new Set(person.linkedPersonIds ?? []);
+    // include links that other people declared towards this person
+    persons.forEach((o) => { if (o.id !== person.id && (o.linkedPersonIds ?? []).includes(person.id)) s.add(o.id); });
+    return [...s];
+  });
+  const [q, setQ] = useState('');
+  const byId = useMemo(() => new Map(persons.map((p) => [p.id, p])), [persons]);
+  const islandName = (id: string) => islands.find((i) => i.id === id)?.name ?? '';
+  const toggleCat = (c: PersonCategory) => setCats((cs) => (cs.includes(c) ? cs.filter((x) => x !== c) : [...cs, c]));
+
+  const candidates = persons
+    .filter((p) => p.id !== person.id && !links.includes(p.id))
+    .filter((p) => {
+      const t = q.trim().toLowerCase();
+      return !t || displayName(p).toLowerCase().includes(t) || ((p as any).nickname ?? '').toLowerCase().includes(t);
+    })
+    .slice(0, 30);
+
+  const save = async () => {
+    await upsert('persons', touchRecord({ ...person, categories: cats, linkedPersonIds: links } as Person));
+    // keep links two-way: removed connections are also removed on the other side
+    for (const o of persons) {
+      if (o.id === person.id) continue;
+      const ol = o.linkedPersonIds ?? [];
+      if (!links.includes(o.id) && ol.includes(person.id)) {
+        await upsert('persons', touchRecord({ ...o, linkedPersonIds: ol.filter((x) => x !== person.id) } as Person));
+      }
+    }
+    onClose();
+  };
+
+  return (
+    <Modal title={`Edit network — ${shortLabel(person, 24)}`} onClose={onClose}>
+      <div className="field">
+        <label>Categories</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {ALL_CATEGORIES.map((c) => (
+            <button type="button" key={c} className={`pill ${cats.includes(c) ? 'active' : ''}`} onClick={() => toggleCat(c)}>{c}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="field">
+        <label>Connected to ({links.length})</label>
+        {links.length === 0 && <div className="field-hint">No connections yet.</div>}
+        {links.map((id) => {
+          const o = byId.get(id);
+          if (!o) return null;
+          return (
+            <div key={id} className="list-item" style={{ alignItems: 'center' }}>
+              <div className="li-main">
+                <div style={{ fontWeight: 600 }}>{displayName(o)}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{islandName(o.islandId)} · {displayCategories(o).join(', ') || '—'}</div>
+              </div>
+              <button type="button" className="btn btn-danger" onClick={() => setLinks((l) => l.filter((x) => x !== id))}>Remove</button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="field">
+        <label>Add connection</label>
+        <input placeholder="Search name or nickname" value={q} onChange={(e) => setQ(e.target.value)} />
+        {candidates.map((p) => (
+          <div key={p.id} className="list-item" style={{ alignItems: 'center' }}>
+            <div className="li-main">
+              <div style={{ fontWeight: 600 }}>{displayName(p)}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{islandName(p.islandId)} · {displayCategories(p).join(', ') || '—'}</div>
+            </div>
+            <button type="button" className="btn" onClick={() => setLinks((l) => [...l, p.id])}>Add</button>
+          </div>
+        ))}
+      </div>
+
+      <div className="btn-row">
+        <button type="button" className="btn" onClick={onClose}>Cancel</button>
+        <button type="button" className="btn btn-primary" onClick={save}>Save</button>
+      </div>
+    </Modal>
   );
 };
 
