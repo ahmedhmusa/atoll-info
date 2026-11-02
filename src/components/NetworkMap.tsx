@@ -36,6 +36,8 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
   const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 });
   const [selected, setSelected] = useState<string | null>(null);
   const [selIsland, setSelIsland] = useState<string | null>(null);
+  // Tapped link: an island pair (a|b island ids) or a single person-to-person link (a|b person ids)
+  const [selLink, setSelLink] = useState<{ kind: 'pair' | 'edge'; a: string; b: string } | null>(null);
   const [editing, setEditing] = useState(false);
   const [full, setFull] = useState(false);
   const [mode, setMode] = useState<'network' | 'map'>('network');
@@ -224,7 +226,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
     }
     return { x: 0, y: 0, k: 1 };
   };
-  useEffect(() => { setView(homeView()); setSelected(null); setSelIsland(null); }, [islandId, isMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setView(homeView()); setSelected(null); setSelIsland(null); setSelLink(null); }, [islandId, isMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- zoom / pan ----------
   const unit = () => {
@@ -295,10 +297,15 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
     if (wasTap && e.type === 'pointerup') {
       const el = document.elementFromPoint(e.clientX, e.clientY);
       const isle = el?.closest('[data-iid]');
-      if (isle) { setSelIsland(isle.getAttribute('data-iid')); setSelected(null); return; }
+      if (isle) { setSelIsland(isle.getAttribute('data-iid')); setSelected(null); setSelLink(null); return; }
       const hit = el?.closest('[data-pid]');
-      setSelected(hit ? hit.getAttribute('data-pid') : null);
-      setSelIsland(null);
+      if (hit) { setSelected(hit.getAttribute('data-pid')); setSelIsland(null); setSelLink(null); return; }
+      const link = el?.closest('[data-link]');
+      if (link) {
+        const [kind, a, b] = link.getAttribute('data-link')!.split('|');
+        setSelLink({ kind: kind as 'pair' | 'edge', a, b }); setSelected(null); setSelIsland(null); return;
+      }
+      setSelected(null); setSelIsland(null); setSelLink(null);
     }
   };
 
@@ -356,11 +363,16 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
             const A = markers.find((m) => m.iid === pl.a), B = markers.find((m) => m.iid === pl.b);
             if (!A || !B) return null;
             const focus = selIsland ?? islandId;
-            const hot = !!focus && (pl.a === focus || pl.b === focus);
+            const isSelL = selLink?.kind === 'pair' && [selLink.a, selLink.b].sort().join('|') === [pl.a, pl.b].sort().join('|');
+            const hot = isSelL || (!!focus && (pl.a === focus || pl.b === focus));
+            const dimmed = (focus || selLink) && !hot;
             return (
-              <line key={'mp' + pl.a + pl.b} x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke={PURPLE}
-                strokeWidth={(1.4 + Math.min(pl.count, 6) * 0.55) / view.k} strokeDasharray={`${5 / view.k} ${3 / view.k}`} strokeLinecap="round"
-                opacity={focus && !hot ? 0.15 : 0.85} style={{ pointerEvents: 'none' }} />
+              <g key={'mp' + pl.a + pl.b} data-link={`pair|${pl.a}|${pl.b}`} style={{ cursor: 'pointer' }}>
+                <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke="transparent" strokeWidth={16 / view.k} />
+                <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke={PURPLE}
+                  strokeWidth={(isSelL ? 3.2 : 1.4 + Math.min(pl.count, 6) * 0.55) / view.k} strokeDasharray={isSelL ? undefined : `${5 / view.k} ${3 / view.k}`} strokeLinecap="round"
+                  opacity={dimmed ? 0.15 : 0.9} />
+              </g>
             );
           })}
           {isMap && markers.map((m) => {
@@ -387,10 +399,12 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
             const x1 = A.x + (dx / len) * A.r, y1 = A.y + (dy / len) * A.r;
             const x2 = B.x - (dx / len) * B.r, y2 = B.y - (dy / len) * B.r;
             const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
-            const faded = !!selected;
+            const isSelL = selLink?.kind === 'pair' && [selLink.a, selLink.b].sort().join('|') === [pl.a, pl.b].sort().join('|');
+            const faded = !!selected || (!!selLink && !isSelL);
             return (
-              <g key={'pl' + pl.a + pl.b} opacity={faded ? 0.15 : 0.9} style={{ pointerEvents: 'none' }}>
-                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={PURPLE} strokeWidth={1.4 + Math.min(pl.count, 6) * 0.6} strokeDasharray="5 3" strokeLinecap="round" />
+              <g key={'pl' + pl.a + pl.b} opacity={faded ? 0.15 : 0.9} data-link={`pair|${pl.a}|${pl.b}`} style={{ cursor: 'pointer' }}>
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={16} />
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={PURPLE} strokeWidth={isSelL ? 3.4 : 1.4 + Math.min(pl.count, 6) * 0.6} strokeDasharray={isSelL ? undefined : '5 3'} strokeLinecap="round" />
                 <circle cx={mx} cy={my} r={7} fill={PURPLE} />
                 <text x={mx} y={my + 3.2} textAnchor="middle" fontSize={9} fontWeight={700} fill="#fff">{pl.count}</text>
               </g>
@@ -408,13 +422,17 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
               x2 = B.x - (dx / len) * (rB + 1); y2 = B.y - (dy / len) * (rB + 1);
             }
             const hot = !!selected && (e.a === selected || e.b === selected);
-            const faded = !!selected && !hot;
+            const isSelE = selLink?.kind === 'edge' && [selLink.a, selLink.b].sort().join('|') === [e.a, e.b].sort().join('|');
+            const faded = (!!selected && !hot) || (!!selLink && !isSelE);
             return (
-              <line key={i} x1={A.x} y1={A.y} x2={x2} y2={y2} stroke={e.cross ? PURPLE : e.color}
-                strokeWidth={isMap ? (hot ? 2 : 1.1) / view.k : (hot ? 3 : 1.8) / Math.sqrt(view.k)}
+              <g key={i} data-link={`edge|${e.a}|${e.b}`} style={{ cursor: 'pointer' }}>
+              <line x1={A.x} y1={A.y} x2={x2} y2={y2} stroke="transparent" strokeWidth={isMap ? 14 / view.k : 14 / Math.sqrt(view.k)} />
+              <line x1={A.x} y1={A.y} x2={x2} y2={y2} stroke={e.cross ? PURPLE : e.color}
+                strokeWidth={isMap ? (hot || isSelE ? 2 : 1.1) / view.k : (hot || isSelE ? 3.4 : 1.8) / Math.sqrt(view.k)}
                 strokeDasharray={e.cross || !e.from ? (isMap ? `${4 / view.k} ${2 / view.k}` : '6 3') : undefined}
                 opacity={faded ? 0.12 : 0.9}
                 markerEnd={e.from ? (e.cross ? 'url(#arrow-purple)' : e.color === RED ? 'url(#arrow-red)' : 'url(#arrow-orange)') : undefined} />
+              </g>
             );
           })}
           {nodes.map(({ p, x, y, outside, r }) => {
@@ -549,6 +567,63 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
         </button>
       </div>
 
+      {selLink && (() => {
+        const byId = new Map(persons.map((p) => [p.id, p]));
+        // every person-to-person link for this line, upstream person first
+        const rows: { up: Person; down: Person; directed: boolean }[] = [];
+        const seenK = new Set<string>();
+        const add = (p: Person, t: Person) => {
+          const key = [p.id, t.id].sort().join('|');
+          if (seenK.has(key)) return; seenK.add(key);
+          const rp = personChainRank(p), rt = personChainRank(t);
+          const directed = rp !== null && rt !== null && rp !== rt;
+          rows.push(directed && rt! < rp! ? { up: t, down: p, directed } : { up: p, down: t, directed });
+        };
+        if (selLink.kind === 'edge') {
+          const p = byId.get(selLink.a), t = byId.get(selLink.b);
+          if (p && t) add(p, t);
+        } else {
+          persons.forEach((p) => (p.linkedPersonIds ?? []).forEach((tid) => {
+            const t = byId.get(tid);
+            if (!t) return;
+            const ia = currentIslandId(p), ib = currentIslandId(t);
+            if ((ia === selLink.a && ib === selLink.b) || (ia === selLink.b && ib === selLink.a)) add(p, t);
+          }));
+        }
+        rows.sort((x, y) => (personChainRank(x.up) ?? 9) - (personChainRank(y.up) ?? 9));
+        const title = selLink.kind === 'pair'
+          ? `${islandName(selLink.a)} ↔ ${islandName(selLink.b)}`
+          : rows[0] && currentIslandId(rows[0].up) !== currentIslandId(rows[0].down) ? 'Link between islands' : 'Link on the same island';
+        const who = (p: Person) => (
+          <div className="link-person" onClick={() => { if (!isMap) { setSelected(p.id); setSelLink(null); } }}>
+            <div dir="auto" className="lp-name">{shortLabel(p, 22)}</div>
+            <div className="lp-sub">{islandName(currentIslandId(p))} · {displayCategories(p).join(', ') || '—'}</div>
+          </div>
+        );
+        return (
+          <div className="net-sheet link-sheet">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div dir="auto" style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{rows.length} link{rows.length === 1 ? '' : 's'}</div>
+              </div>
+              {isMap && selLink.kind === 'pair' && onOpenIsland && (
+                <button className="btn btn-primary" onClick={() => { onOpenIsland(selLink.a); setMode('network'); }}>Open network</button>
+              )}
+              <button className="icon-btn" aria-label="Close" onClick={() => setSelLink(null)}><X size={16} /></button>
+            </div>
+            <div className="link-rows">
+              {rows.map((r) => (
+                <div key={r.up.id + r.down.id} className="link-row">
+                  {who(r.up)}
+                  <span className="lr-arrow" title={r.directed ? 'supplies' : 'linked'}>{r.directed ? '→' : '—'}</span>
+                  {who(r.down)}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
       {isMap && selIsland && (() => {
         const m = markers.find((mk) => mk.iid === selIsland);
         if (!m) return null;

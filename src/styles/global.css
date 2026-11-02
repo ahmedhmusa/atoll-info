@@ -430,6 +430,13 @@ button:disabled { opacity: 0.45; }
 .marker-name { position: absolute; transform: translateX(-50%); white-space: nowrap; font-size: 11.5px; font-weight: 600; color: var(--text); text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg); }
 .pair-count { position: absolute; transform: translate(-50%, -50%); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
   background: #a259d9; color: #fff; font-size: 10.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.net-sheet.link-sheet { flex-direction: column; align-items: stretch; max-height: 62%; }
+.link-rows { width: 100%; overflow-y: auto; margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.link-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px; background: var(--card2); border-radius: 12px; padding: 7px 9px; }
+.link-person { min-width: 0; }
+.lp-name { font-weight: 700; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-sub { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lr-arrow { font-size: 17px; font-weight: 700; color: #a259d9; }
 .net-ctrl { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 8px; }
 .net-ctrl .icon-btn { width: 40px; min-width: 40px; height: 40px; padding: 0; }
 .net-sheet {
