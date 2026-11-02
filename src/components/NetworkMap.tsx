@@ -42,6 +42,13 @@ interface Marker { iid: string; x: number; y: number; count: number; dealers: nu
 interface Edge { a: string; b: string; from?: string; to?: string; color: string; cross: boolean }
 interface View { x: number; y: number; k: number }
 
+/** Stable pseudo-random number 0..1 from an id (same person -> same offset every time). */
+function jitter(id: string, salt: number): number {
+  let h = 2166136261 ^ salt;
+  for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return ((h >>> 0) % 1000) / 1000;
+}
+
 /** Filled arrowhead with its tip at the point t (0..1) along x1,y1 -> x2,y2; s = half-width. */
 function arrowHead(x1: number, y1: number, x2: number, y2: number, s: number, t = 1): string {
   const dx = x2 - x1, dy = y2 - y1, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l;
@@ -145,13 +152,76 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
       });
       const fill = (iid: string, list: Person[], cx: number, cy: number, rb: number, main?: boolean) => {
         bubbles.push({ iid, x: cx, y: cy, r: rb, main });
-        const sorted = [...list].sort(rankSort);
-        const n = sorted.length;
-        const rr = n > 1 ? rb * 0.62 : 0;
-        const dot = Math.max(3.5, Math.min(11, rb * 0.24, n > 1 ? ((2 * Math.PI * rr) / n) * 0.3 : 11));
-        sorted.forEach((p, i) => {
-          const ang = (i / Math.max(n, 1)) * Math.PI * 2 - Math.PI / 2;
-          out.push({ p, x: cx + Math.cos(ang) * rr, y: cy + Math.sin(ang) * rr, r: dot });
+        const n = list.length;
+        if (n === 0) return;
+        if (n === 1) { out.push({ p: list[0], x: cx, y: cy, r: Math.min(11, rb * 0.3) }); return; }
+        // Supply-chain rows: suppliers at the top, the people they supply below, unlinked people at the bottom
+        const inIsl = new Set(list.map((p) => p.id));
+        const down = new Map<string, string[]>(); // supplier -> supplied
+        const linked = new Set<string>();
+        const pairSeen = new Set<string>();
+        list.forEach((p) => (p.linkedPersonIds ?? []).forEach((tid) => {
+          const t = byId.get(tid);
+          if (!t || !inIsl.has(tid) || tid === p.id) return;
+          const key = [p.id, tid].sort().join('|');
+          if (pairSeen.has(key)) return;
+          pairSeen.add(key);
+          linked.add(p.id); linked.add(tid);
+          const fd = flowDir(p, t);
+          if (fd === 'pt') down.set(p.id, [...(down.get(p.id) ?? []), tid]);
+          if (fd === 'tp') down.set(tid, [...(down.get(tid) ?? []), p.id]);
+        }));
+        const hasDir = new Set<string>();
+        down.forEach((vs, u) => { hasDir.add(u); vs.forEach((v) => hasDir.add(v)); });
+        const depth = new Map<string, number>();
+        list.forEach((p) => depth.set(p.id, hasDir.has(p.id) ? 0 : (personChainRank(p) ?? 1)));
+        for (let it = 0; it < n; it++) { // longest path from a top supplier (bounded, so loops can't run forever)
+          let changed = false;
+          down.forEach((vs, u) => vs.forEach((v) => {
+            const d = (depth.get(u) ?? 0) + 1;
+            if (d > (depth.get(v) ?? 0) && d <= n) { depth.set(v, d); changed = true; }
+          }));
+          if (!changed) break;
+        }
+        const layered = list.filter((p) => linked.has(p.id));
+        const loose = list.filter((p) => !linked.has(p.id)).sort(rankSort);
+        const levels = [...new Set(layered.map((p) => depth.get(p.id)!))].sort((x, y) => x - y);
+        const perLine = Math.max(3, Math.round(Math.sqrt(n) * 1.5));
+        const lines: Person[][] = [];
+        levels.forEach((lv) => {
+          const row = layered.filter((p) => depth.get(p.id) === lv).sort(rankSort);
+          for (let i = 0; i < row.length; i += perLine) lines.push(row.slice(i, i + perLine));
+        });
+        for (let i = 0; i < loose.length; i += perLine + 1) lines.push(loose.slice(i, i + perLine + 1));
+        const m = lines.length;
+        const span = rb * (m > 1 ? 0.66 : 0);
+        const placed = new Map<string, number>(); // x of placed people, to order the next row under its suppliers
+        const ups = new Map<string, string[]>();
+        down.forEach((vs, u) => vs.forEach((v) => ups.set(v, [...(ups.get(v) ?? []), u])));
+        const geo = lines.map((line, li) => {
+          const y = cy - span + (m > 1 ? (2 * span * li) / (m - 1) : 0);
+          const hc = Math.sqrt(Math.max(rb * rb - (y - cy) * (y - cy), 0)) * 0.8;
+          return { line, y, hc, gap: line.length > 1 ? (2 * hc) / (line.length - 1) : 2 * hc };
+        });
+        const rowGap = m > 1 ? (2 * span) / (m - 1) : rb;
+        const dot = Math.max(3.5, Math.min(11, rb * 0.2, rowGap * 0.3, ...geo.map((g) => g.gap * 0.32)));
+        geo.forEach(({ line, y, hc }) => {
+          const ordered = [...line].sort((p1, p2) => {
+            const bx = (p: Person) => { const xs = (ups.get(p.id) ?? []).map((u) => placed.get(u)).filter((v): v is number => v !== undefined); return xs.length ? xs.reduce((a2, b2) => a2 + b2, 0) / xs.length : cx; };
+            return bx(p1) - bx(p2);
+          });
+          const gapX = ordered.length > 1 ? (2 * hc) / (ordered.length - 1) : hc;
+          ordered.forEach((p, i) => {
+            // small fixed offsets (from the person's id) so rows aren't a rigid grid and arrows don't line up
+            const jx = (jitter(p.id, 1) - 0.5) * Math.min(gapX * 0.35, rb * 0.12);
+            const jy = (jitter(p.id, 2) - 0.5) * rowGap * 0.34 + (i % 2 ? rowGap * 0.12 : -rowGap * 0.12);
+            let x = (ordered.length > 1 ? cx - hc + (2 * hc * i) / (ordered.length - 1) : cx) + jx;
+            let yy = y + (m > 1 ? jy : 0);
+            const d = Math.hypot(x - cx, yy - cy), lim = rb - dot * 1.8; // stay inside the island circle
+            if (d > lim) { x = cx + ((x - cx) / d) * lim; yy = cy + ((yy - cy) / d) * lim; }
+            placed.set(p.id, x);
+            out.push({ p, x, y: yy, r: dot });
+          });
         });
       };
       if (islandId) {
@@ -169,11 +239,11 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
           others.get(iid)!.push(p);
         });
         const ol = [...others.entries()];
-        fill(islandId, here, W / 2 - 14, H / 2 + 12, ol.length ? 88 : 125, true);
+        fill(islandId, here, W / 2 - 14, H / 2 + 14, ol.length ? 106 : 128, true);
         ol.forEach(([iid, list], i) => {
           const ang = (i / ol.length) * Math.PI * 2 - Math.PI / 2 + Math.PI / Math.max(ol.length, 2); // half-step rotation keeps the top-left clear
           const rb = Math.min(40, 18 + list.length * 5, ol.length > 6 ? 30 : 40);
-          fill(iid, list, W / 2 - 14 + Math.cos(ang) * 132, H / 2 + 12 + Math.sin(ang) * 132, rb);
+          fill(iid, list, W / 2 - 14 + Math.cos(ang) * 146, H / 2 + 14 + Math.sin(ang) * 146, Math.min(rb, 34));
         });
       } else {
         // Grid of island bubbles, biggest islands first
