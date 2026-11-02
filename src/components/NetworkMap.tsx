@@ -27,7 +27,17 @@ const PURPLE = '#a259d9'; // links between different islands
 
 interface Node { p: Person; x: number; y: number; outside?: boolean; r?: number }
 interface Bubble { iid: string; x: number; y: number; r: number; main?: boolean }
-interface PairLink { a: string; b: string; count: number }
+// ab / ba: links where supply flows from island a to b / b to a; count = all links (incl. undirected)
+interface PairLink { a: string; b: string; count: number; ab: number; ba: number }
+
+/** Count a link into an island pair, noting supply direction (from = upstream island). */
+function countPair(m: Map<string, PairLink>, ia: string, ib: string, fromIsland?: string) {
+  const key = [ia, ib].sort().join('|');
+  const cur = m.get(key) ?? { a: ia, b: ib, count: 0, ab: 0, ba: 0 };
+  cur.count += 1;
+  if (fromIsland === cur.a) cur.ab += 1; else if (fromIsland === cur.b) cur.ba += 1;
+  m.set(key, cur);
+}
 interface Marker { iid: string; x: number; y: number; count: number; dealers: number; users: number; exact: boolean }
 interface Edge { a: string; b: string; from?: string; to?: string; color: string; cross: boolean }
 interface View { x: number; y: number; k: number }
@@ -113,9 +123,9 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
         seenP.add(key);
         const ia = currentIslandId(p), ib = currentIslandId(t);
         if (ia === ib) return;
-        const k2 = [ia, ib].sort().join('|');
-        const cur = pmap.get(k2) ?? { a: ia, b: ib, count: 0 };
-        cur.count += 1; pmap.set(k2, cur);
+        const rp = personChainRank(p), rt = personChainRank(t);
+        const from = rp !== null && rt !== null && rp !== rt ? (rp < rt ? ia : ib) : undefined;
+        countPair(pmap, ia, ib, from);
       }));
       mapPairs.push(...pmap.values());
     } else {
@@ -199,9 +209,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
     es.forEach((e) => {
       if (!e.cross) return;
       const ia = currentIslandId(pos.get(e.a)!.p), ib = currentIslandId(pos.get(e.b)!.p);
-      const key = [ia, ib].sort().join('|');
-      const cur = pm.get(key) ?? { a: ia, b: ib, count: 0 };
-      cur.count += 1; pm.set(key, cur);
+      countPair(pm, ia, ib, e.from ? currentIslandId(pos.get(e.from)!.p) : undefined);
     });
     return { nodes: out, edges: es, bubbles, pairs: [...pm.values()], markers, mapPairs };
   }, [persons, islands, islandId, isMap]);
@@ -323,6 +331,31 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
   // except the tapped person's own links, which are drawn person to person.
   const bundled = !isMap && !islandId;
   const bubbleOf = useMemo(() => new Map(bubbles.map((b) => [b.iid, b])), [bubbles]);
+
+  /**
+   * Line pieces for an island pair: one arrowed line per supply direction
+   * (two side-by-side lines when supply goes both ways), or a plain line
+   * when no direction is known. u = 1 in Network view, 1/k in Map view.
+   */
+  const pairSegs = (pl: PairLink, A: { x: number; y: number; r: number }, B: { x: number; y: number; r: number }, u: number) => {
+    const dx = B.x - A.x, dy = B.y - A.y, len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+    const und = pl.count - pl.ab - pl.ba;
+    const both = pl.ab > 0 && pl.ba > 0;
+    const off = both ? 6 * u : 0;
+    const seg = (dir: 'ab' | 'ba' | null, count: number, o: number, t = 0.5) => {
+      const [S, T, sx, sy] = dir === 'ba' ? [B, A, -ux, -uy] : [A, B, ux, uy];
+      const x1 = S.x + sx * S.r + nx * o, y1 = S.y + sy * S.r + ny * o;
+      const x2 = T.x - sx * (T.r + 1.5 * u) + nx * o, y2 = T.y - sy * (T.r + 1.5 * u) + ny * o;
+      return { dir, count, x1, y1, x2, y2, mx: x1 + (x2 - x1) * t, my: y1 + (y2 - y1) * t };
+    };
+    // badges staggered (35% / 35% from each source) so the two counts don't overlap
+    if (both) return [seg('ab', pl.ab + Math.ceil(und / 2), off, 0.35), seg('ba', pl.ba + Math.floor(und / 2), -off, 0.35)];
+    if (pl.ab) return [seg('ab', pl.count, 0)];
+    if (pl.ba) return [seg('ba', pl.count, 0)];
+    return [seg(null, pl.count, 0)];
+  };
+  const markerR = (m: Marker) => (8 + Math.min(m.count, 40) * 0.28) / view.k;
   const dim = (id: string) => !!selected && id !== selected && !neighbours.has(id);
 
   const canvas = (
@@ -366,17 +399,23 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
             const isSelL = selLink?.kind === 'pair' && [selLink.a, selLink.b].sort().join('|') === [pl.a, pl.b].sort().join('|');
             const hot = isSelL || (!!focus && (pl.a === focus || pl.b === focus));
             const dimmed = (focus || selLink) && !hot;
+            const u = 1 / view.k;
+            const segs = pairSegs(pl, { x: A.x, y: A.y, r: markerR(A) }, { x: B.x, y: B.y, r: markerR(B) }, u);
             return (
-              <g key={'mp' + pl.a + pl.b} data-link={`pair|${pl.a}|${pl.b}`} style={{ cursor: 'pointer' }}>
-                <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke="transparent" strokeWidth={16 / view.k} />
-                <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke={PURPLE}
-                  strokeWidth={(isSelL ? 3.2 : 1.4 + Math.min(pl.count, 6) * 0.55) / view.k} strokeDasharray={isSelL ? undefined : `${5 / view.k} ${3 / view.k}`} strokeLinecap="round"
-                  opacity={dimmed ? 0.15 : 0.9} />
+              <g key={'mp' + pl.a + pl.b} data-link={`pair|${pl.a}|${pl.b}`} style={{ cursor: 'pointer' }} opacity={dimmed ? 0.15 : 0.95}>
+                <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke="transparent" strokeWidth={18 * u} />
+                {segs.map((g, gi) => (
+                  <line key={gi} x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2} stroke={PURPLE} strokeLinecap="round"
+                    strokeWidth={(isSelL ? 2.8 : 1.6 + Math.min(g.count, 5) * 0.35) * u}
+                    strokeDasharray={`${5 * u} ${3 * u}`} className={g.dir ? 'flow' : undefined}
+                    style={{ ['--dash' as string]: `${-8 * u}` }}
+                    markerEnd={g.dir ? 'url(#arrow-purple)' : undefined} />
+                ))}
               </g>
             );
           })}
           {isMap && markers.map((m) => {
-            const r = (8 + Math.min(m.count, 40) * 0.28) / view.k;
+            const r = markerR(m);
             const on = m.iid === selIsland || m.iid === islandId;
             const focus = selIsland ?? islandId;
             const linked = !focus || on || mapPairs.some((pl) => (pl.a === focus && pl.b === m.iid) || (pl.b === focus && pl.a === m.iid));
@@ -395,18 +434,22 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
           {bundled && linkFilter !== 'same' && pairs.map((pl) => {
             const A = bubbleOf.get(pl.a), B = bubbleOf.get(pl.b);
             if (!A || !B) return null;
-            const dx = B.x - A.x, dy = B.y - A.y, len = Math.hypot(dx, dy) || 1;
-            const x1 = A.x + (dx / len) * A.r, y1 = A.y + (dy / len) * A.r;
-            const x2 = B.x - (dx / len) * B.r, y2 = B.y - (dy / len) * B.r;
-            const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+            const segs = pairSegs(pl, A, B, 1);
             const isSelL = selLink?.kind === 'pair' && [selLink.a, selLink.b].sort().join('|') === [pl.a, pl.b].sort().join('|');
             const faded = !!selected || (!!selLink && !isSelL);
             return (
-              <g key={'pl' + pl.a + pl.b} opacity={faded ? 0.15 : 0.9} data-link={`pair|${pl.a}|${pl.b}`} style={{ cursor: 'pointer' }}>
-                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={16} />
-                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={PURPLE} strokeWidth={isSelL ? 3.4 : 1.4 + Math.min(pl.count, 6) * 0.6} strokeDasharray={isSelL ? undefined : '5 3'} strokeLinecap="round" />
-                <circle cx={mx} cy={my} r={7} fill={PURPLE} />
-                <text x={mx} y={my + 3.2} textAnchor="middle" fontSize={9} fontWeight={700} fill="#fff">{pl.count}</text>
+              <g key={'pl' + pl.a + pl.b} opacity={faded ? 0.15 : 0.95} data-link={`pair|${pl.a}|${pl.b}`} style={{ cursor: 'pointer' }}>
+                <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke="transparent" strokeWidth={18} />
+                {segs.map((g, gi) => (
+                  <g key={gi}>
+                    <line x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2} stroke={PURPLE} strokeLinecap="round"
+                      strokeWidth={isSelL ? 3 : 1.6 + Math.min(g.count, 5) * 0.35} strokeDasharray="5 3"
+                      className={g.dir ? 'flow' : undefined} style={{ ['--dash' as string]: '-8' }}
+                      markerEnd={g.dir ? 'url(#arrow-purple)' : undefined} />
+                    <circle cx={g.mx} cy={g.my} r={6.5} fill={PURPLE} />
+                    <text x={g.mx} y={g.my + 3} textAnchor="middle" fontSize={8.5} fontWeight={700} fill="#fff">{g.count}</text>
+                  </g>
+                ))}
               </g>
             );
           })}
@@ -430,6 +473,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
               <line x1={A.x} y1={A.y} x2={x2} y2={y2} stroke={e.cross ? PURPLE : e.color}
                 strokeWidth={isMap ? (hot || isSelE ? 2 : 1.1) / view.k : (hot || isSelE ? 3.4 : 1.8) / Math.sqrt(view.k)}
                 strokeDasharray={e.cross || !e.from ? (isMap ? `${4 / view.k} ${2 / view.k}` : '6 3') : undefined}
+                className={e.cross && e.from ? 'flow' : undefined} style={{ ['--dash' as string]: '-9' }}
                 opacity={faded ? 0.12 : 0.9}
                 markerEnd={e.from ? (e.cross ? 'url(#arrow-purple)' : e.color === RED ? 'url(#arrow-red)' : 'url(#arrow-orange)') : undefined} />
               </g>
@@ -503,10 +547,12 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
           if (linkFilter !== 'same') mapPairs.forEach((pl) => {
             const A = markers.find((m) => m.iid === pl.a), B = markers.find((m) => m.iid === pl.b);
             if (!A || !B) return;
-            const q = at((A.x + B.x) / 2, (A.y + B.y) / 2);
             const pa = at(A.x, A.y), pb = at(B.x, B.y);
             if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < 48) return; // too short to label without covering the markers
-            if (inView(q)) out.push(<div key={'pc' + pl.a + pl.b} className="pair-count" style={{ left: q.x, top: q.y }}>{pl.count}</div>);
+            pairSegs(pl, { x: A.x, y: A.y, r: markerR(A) }, { x: B.x, y: B.y, r: markerR(B) }, 1 / view.k).forEach((g, gi) => {
+              const q = at(g.mx, g.my);
+              if (inView(q)) out.push(<div key={'pc' + pl.a + pl.b + gi} className="pair-count" style={{ left: q.x, top: q.y }}>{g.count}</div>);
+            });
           });
           if (markers.some((m) => islandAtoll(islands.find((i) => i.id === m.iid)) === undefined)) {
             const w = toWorld(MAP_W + 70, 455);
