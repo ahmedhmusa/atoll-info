@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { openDB, type IDBPDatabase, type DBSchema } from 'idb';
-import type { CryptoConfigRecord, AppSettingsRecord } from '../types';
+import type { CryptoConfigRecord, AppSettingsRecord, BiometricRecord } from '../types';
 
 export const DB_NAME = 'atoll-info';
 export const DB_VERSION = 1;
@@ -26,7 +26,7 @@ interface AtollDBSchema extends DBSchema {
   informants: { key: string; value: EncryptedRecord };
   reports: { key: string; value: EncryptedRecord };
   tasks: { key: string; value: EncryptedRecord };
-  cryptoConfig: { key: string; value: CryptoConfigRecord };
+  cryptoConfig: { key: string; value: CryptoConfigRecord | BiometricRecord };
   settingsMeta: { key: string; value: AppSettingsRecord };
 }
 
@@ -87,7 +87,7 @@ export async function clearIslands(): Promise<void> {
 
 export async function getCryptoConfig(): Promise<CryptoConfigRecord | undefined> {
   const db = await getDB();
-  return db.get('cryptoConfig', 'crypto-config');
+  return db.get('cryptoConfig', 'crypto-config') as Promise<CryptoConfigRecord | undefined>;
 }
 
 export async function putCryptoConfig(cfg: CryptoConfigRecord): Promise<void> {
@@ -103,4 +103,20 @@ export async function getSettings(): Promise<AppSettingsRecord | undefined> {
 export async function putSettings(settings: AppSettingsRecord): Promise<void> {
   const db = await getDB();
   await db.put('settingsMeta', settings);
+}
+
+// Face ID record lives beside the PIN config (same store, different id).
+export async function getBiometric(): Promise<BiometricRecord | undefined> {
+  const db = await getDB();
+  return db.get('cryptoConfig', 'biometric') as Promise<BiometricRecord | undefined>;
+}
+
+export async function putBiometric(rec: BiometricRecord): Promise<void> {
+  const db = await getDB();
+  await db.put('cryptoConfig', rec);
+}
+
+export async function deleteBiometric(): Promise<void> {
+  const db = await getDB();
+  await db.delete('cryptoConfig', 'biometric');
 }

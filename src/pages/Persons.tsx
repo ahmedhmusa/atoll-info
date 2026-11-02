@@ -76,13 +76,14 @@ const Persons: React.FC = () => {
             <div className="li-main">
               <div className="li-title">{displayName(p)}{p.nickname ? ` "${p.nickname}"` : ''}</div>
               <div className="li-sub">{islandName(p.islandId)}{p.flagStatus && p.flagStatus !== 'None' ? ` · ${p.flagStatus}` : ''}</div>
+              {displayCategories(p).length > 0 && (
+                <div className="tag-row">
+                  {displayCategories(p).map((c) => <span key={c} className={`tag badge-${categoryKind(c)}`}>{c}</span>)}
+                </div>
+              )}
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {displayCategories(p).slice(0, 1).map((c) => <Badge key={c} text={c} kind={categoryKind(c) as any} />)}
-            {displayCategories(p).length > 1 && <Badge text={`+${displayCategories(p).length - 1}`} kind="neutral" />}
-            <ChevronRight size={18} className="li-chevron" />
-          </div>
+          <ChevronRight size={18} className="li-chevron" />
         </div>
       ))}
       {filtered.length === 0 && <div className="empty-state">No persons match this filter — tap + to add one.</div>}

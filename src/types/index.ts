@@ -83,6 +83,16 @@ export interface AppSettingsRecord {
   updatedAt: string;
 }
 
+/** Face ID unlock: the PIN, encrypted with a key only Face ID can release. */
+export interface BiometricRecord {
+  id: 'biometric';
+  credentialId: string;
+  prfSalt: string;
+  ct: string;
+  iv: string;
+  createdAt: string;
+}
+
 export interface CryptoConfigRecord {
   id: 'crypto-config';
   salt: number[];

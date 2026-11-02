@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { createNewKeyMaterial, createVerifier, deriveKey, testVerifier, encryptJSON, decryptJSON, bytesToBase64, base64ToBytes } from '../lib/crypto';
 import * as db from '../lib/db';
 import * as backupLib from '../lib/backup';
+import * as bio from '../lib/biometric';
 import { seedIslands } from '../lib/seed';
 import { newId, nowISO } from '../lib/util';
 import type { Island, Person, Informant, Report, TaskItem, AppSettingsRecord, CryptoConfigRecord } from '../types';
@@ -13,6 +14,7 @@ const empty: Collections = { islands: [], persons: [], informants: [], reports: 
 interface StoreState {
   ready: boolean;
   hasPin: boolean;
+  hasBiometric: boolean;
   locked: boolean;
   unlocking: boolean;
   data: Collections;
@@ -23,6 +25,9 @@ interface StoreState {
 interface StoreContextValue extends StoreState {
   setupPin: (pin: string) => Promise<void>;
   unlock: (pin: string) => Promise<boolean>;
+  unlockWithBiometric: () => Promise<boolean>;
+  enableBiometric: (pin: string) => Promise<{ ok: boolean; message: string; pending?: () => Promise<{ ok: boolean; message: string }> }>;
+  disableBiometric: () => Promise<void>;
   lock: () => void;
   changePin: (oldPin: string, newPin: string) => Promise<boolean>;
   touchActivity: () => void;
@@ -41,7 +46,7 @@ const DEFAULT_TIMEOUT_MIN = 5;
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<StoreState>({
-    ready: false, hasPin: false, locked: true, unlocking: false, data: empty, settings: null, error: null,
+    ready: false, hasPin: false, hasBiometric: false, locked: true, unlocking: false, data: empty, settings: null, error: null,
   });
   const keyRef = useRef<CryptoKey | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
@@ -51,7 +56,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     (async () => {
       const cfg = await db.getCryptoConfig();
       const settings = await db.getSettings();
-      setState((s) => ({ ...s, ready: true, hasPin: !!cfg, settings: settings ?? null }));
+      const biometric = await db.getBiometric();
+      setState((s) => ({ ...s, ready: true, hasPin: !!cfg, hasBiometric: !!biometric, settings: settings ?? null }));
     })();
   }, []);
 
@@ -128,6 +134,56 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return true;
   }, [loadAll]);
 
+  const unlockWithBiometric = useCallback(async (): Promise<boolean> => {
+    try {
+      const pin = await bio.recoverPin();
+      return await unlock(pin);
+    } catch (e: any) {
+      const cancelled = e?.name === 'NotAllowedError' || e?.name === 'AbortError';
+      setState((s) => ({ ...s, error: cancelled ? null : (e?.message || 'Face ID failed. Use your PIN.') }));
+      return false;
+    }
+  }, [unlock]);
+
+  const checkPin = async (pin: string): Promise<boolean> => {
+    const cfg = await db.getCryptoConfig();
+    if (!cfg) return false;
+    const key = await deriveKey(pin, new Uint8Array(cfg.salt), cfg.iterations);
+    return testVerifier(key, cfg.verifier, bytesToBase64(new Uint8Array(cfg.verifierIv)));
+  };
+
+  const describeBioError = (e: any) =>
+    e?.name === 'NotAllowedError' || e?.name === 'AbortError' ? 'Face ID was cancelled.' : (e?.message || 'Face ID could not be set up.');
+
+  const enableBiometric = useCallback(async (pin: string) => {
+    if (!(await bio.biometricAvailable())) return { ok: false, message: 'Face ID is not available on this device.' };
+    if (!(await checkPin(pin))) return { ok: false, message: 'Incorrect PIN.' };
+    try {
+      const r = await bio.startEnrollment(pin);
+      if (r.done) {
+        setState((s) => ({ ...s, hasBiometric: true }));
+        return { ok: true, message: 'Face ID unlock is on.' };
+      }
+      return {
+        ok: false, message: 'One more step: tap Confirm and look at your phone.',
+        pending: async () => {
+          try {
+            await bio.finishEnrollment(pin, r.credentialId, r.salt);
+            setState((s) => ({ ...s, hasBiometric: true }));
+            return { ok: true, message: 'Face ID unlock is on.' };
+          } catch (e) { return { ok: false, message: describeBioError(e) }; }
+        },
+      };
+    } catch (e) {
+      return { ok: false, message: describeBioError(e) };
+    }
+  }, []);
+
+  const disableBiometric = useCallback(async () => {
+    await db.deleteBiometric();
+    setState((s) => ({ ...s, hasBiometric: false }));
+  }, []);
+
   const changePin = useCallback(async (oldPin: string, newPin: string): Promise<boolean> => {
     const cfg = await db.getCryptoConfig();
     if (!cfg) return false;
@@ -150,8 +206,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       verifierIv: Array.from(base64ToBytes(verifier.iv)), iterations, createdAt: cfg.createdAt,
     });
     keyRef.current = newKey;
+    await db.deleteBiometric(); // it protected the old PIN; turn on again in Settings
     const result = await loadAll(newKey);
-    setState((s) => ({ ...s, data: result }));
+    setState((s) => ({ ...s, data: result, hasBiometric: false }));
     return true;
   }, [loadAll]);
 
@@ -233,7 +290,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       keyRef.current = restoredKey;
       const result = await loadAll(restoredKey);
       const settings = (await db.getSettings()) ?? null;
-      setState((s) => ({ ...s, hasPin: true, locked: false, data: result, settings }));
+      await db.deleteBiometric(); // the restored backup may use a different PIN
+      setState((s) => ({ ...s, hasPin: true, hasBiometric: false, locked: false, data: result, settings }));
       return { ok: true, message: 'Full restore complete. The database now matches this backup.', summary };
     }
 
@@ -247,7 +305,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [loadAll]);
 
   const value: StoreContextValue = {
-    ...state, setupPin, unlock, lock, changePin, touchActivity, upsert, remove, updateSettings, wipeAllData, clearIslands,
+    ...state, setupPin, unlock, unlockWithBiometric, enableBiometric, disableBiometric, lock, changePin, touchActivity, upsert, remove, updateSettings, wipeAllData, clearIslands,
     exportBackup, inspectBackup, restoreFromBackup,
   };
 

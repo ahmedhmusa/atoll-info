@@ -3,6 +3,7 @@ import { useStore } from '../state/store';
 import type { InspectResult, RestoreSummary } from '../lib/backup';
 import { formatDate } from '../lib/util';
 import { APP_VERSION, SCHEMA_VERSION } from '../lib/appMeta';
+import FaceIdCard from '../components/FaceIdCard';
 
 const TIMEOUTS = [1, 2, 5, 10, 15, 30];
 
@@ -27,7 +28,7 @@ const Settings: React.FC = () => {
     setPinBusy(true);
     const ok = await changePin(oldPin, newPin);
     setPinBusy(false);
-    if (ok) { setPinMsg('PIN changed successfully.'); setOldPin(''); setNewPin(''); setConfirmPin(''); }
+    if (ok) { setPinMsg('PIN changed. If you used Face ID, turn it on again above.'); setOldPin(''); setNewPin(''); setConfirmPin(''); }
     else setPinMsg('Current PIN is incorrect.');
   };
 
@@ -117,6 +118,8 @@ const Settings: React.FC = () => {
         <button className="btn btn-primary" onClick={saveGeneral}>Save</button>
         <button className="btn" style={{ marginTop: 10 }} onClick={lock}>Lock Now</button>
       </div>
+
+      <FaceIdCard />
 
       <div className="card">
         <div className="card-title">Change PIN</div>

@@ -1,11 +1,22 @@
-import React, { useState } from 'react';
-import { Shield, Lock } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Shield, Lock, ScanFace } from 'lucide-react';
 import { useStore } from '../state/store';
 
 const MIN_PIN_LENGTH = 6;
+// Automatic Face ID only on app launch, not right after pressing Lock.
+let autoFaceIdTried = false;
 
 export const LockScreen: React.FC = () => {
-  const { hasPin, setupPin, unlock, unlocking, error } = useStore();
+  const { hasPin, hasBiometric, setupPin, unlock, unlockWithBiometric, unlocking, error } = useStore();
+
+  // Offer Face ID straight away when the app opens, like a native app.
+  // If iOS needs a tap first, the button below does the same thing.
+  useEffect(() => {
+    if (hasPin && hasBiometric && !autoFaceIdTried) {
+      autoFaceIdTried = true;
+      unlockWithBiometric();
+    }
+  }, [hasPin, hasBiometric, unlockWithBiometric]);
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
@@ -65,9 +76,15 @@ export const LockScreen: React.FC = () => {
     <div className="lock-screen">
       <div className="lock-badge"><Lock size={28} strokeWidth={1.75} /></div>
       <div className="lock-title">Atoll Info Locked</div>
-      <div className="lock-sub">Enter your PIN to unlock.</div>
+      <div className="lock-sub">{hasBiometric ? 'Use Face ID or enter your PIN.' : 'Enter your PIN to unlock.'}</div>
+      {hasBiometric && (
+        <button type="button" className="faceid-btn" onClick={() => unlockWithBiometric()} disabled={unlocking} aria-label="Unlock with Face ID">
+          <ScanFace size={44} strokeWidth={1.5} />
+          <span>Unlock with Face ID</span>
+        </button>
+      )}
       <form onSubmit={handleUnlockSubmit} style={{ width: '100%', maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
-        <input className="pin-input" type="password" inputMode="numeric" autoFocus placeholder="PIN" value={pin} onChange={(e) => setPin(e.target.value)} />
+        <input className="pin-input" type="password" inputMode="numeric" autoFocus={!hasBiometric} placeholder="PIN" value={pin} onChange={(e) => setPin(e.target.value)} />
         <div className="lock-error">{error ?? localError}</div>
         <button className="btn btn-primary" type="submit" disabled={unlocking}>{unlocking ? 'Unlocking…' : 'Unlock'}</button>
       </form>
