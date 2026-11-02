@@ -60,7 +60,7 @@ const Dashboard: React.FC = () => {
 
       <div className="card-title">Drug Network · {islandLabel}</div>
       <div className="card" style={{ padding: 8 }}>
-        <NetworkMap persons={data.persons} islands={data.islands} islandId={islandId} />
+        <NetworkMap persons={data.persons} islands={data.islands} islandId={islandId} onOpenIsland={setIslandId} />
       </div>
 
       <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginRight: 4 }}>

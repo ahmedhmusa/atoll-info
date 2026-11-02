@@ -28,12 +28,14 @@ const PURPLE = '#a259d9'; // links between different islands
 interface Node { p: Person; x: number; y: number; outside?: boolean; r?: number }
 interface Bubble { iid: string; x: number; y: number; r: number; main?: boolean }
 interface PairLink { a: string; b: string; count: number }
+interface Marker { iid: string; x: number; y: number; count: number; dealers: number; users: number; exact: boolean }
 interface Edge { a: string; b: string; from?: string; to?: string; color: string; cross: boolean }
 interface View { x: number; y: number; k: number }
 
-const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: string }> = ({ persons, islands, islandId }) => {
+const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: string; onOpenIsland?: (id: string) => void }> = ({ persons, islands, islandId, onOpenIsland }) => {
   const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 });
   const [selected, setSelected] = useState<string | null>(null);
+  const [selIsland, setSelIsland] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [full, setFull] = useState(false);
   const [mode, setMode] = useState<'network' | 'map'>('network');
@@ -57,11 +59,13 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
   const islandName = (id: string) => islands.find((i) => i.id === id)?.name ?? '';
 
   // ---------- layout ----------
-  const { nodes, edges, bubbles, pairs } = useMemo(() => {
+  const { nodes, edges, bubbles, pairs, markers, mapPairs } = useMemo(() => {
     const byId = new Map(persons.map((p) => [p.id, p]));
     const rankSort = (a: Person, b: Person) => (personChainRank(a) ?? 9) - (personChainRank(b) ?? 9);
     const out: Node[] = [];
     const bubbles: Bubble[] = [];
+    const markers: Marker[] = [];
+    const mapPairs: PairLink[] = [];
     if (isMap) {
       // Group by atoll -> island (present island), place around the atoll's point on the map
       const islandById = new Map(islands.map((i) => [i.id, i]));
@@ -80,29 +84,38 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
         // Islands with a known position (Thaa) sit exactly there; others share a ring around the atoll point
         const exact = all.filter(([iid]) => islandPoint(islandById.get(iid)));
         const list = all.filter(([iid]) => !islandPoint(islandById.get(iid)));
-        exact.forEach(([iid, ppl]) => {
-          const [ix, iy] = islandPoint(islandById.get(iid))!;
-          const sorted = [...ppl].sort(rankSort);
-          const pr = sorted.length > 1 ? Math.max(1.1, sorted.length * 0.5) : 0;
-          sorted.forEach((p, k) => {
-            const b = (k / sorted.length) * Math.PI * 2 - Math.PI / 2;
-            const w = toWorld(ix + Math.cos(b) * pr, iy + Math.sin(b) * pr);
-            out.push({ p, x: w.x, y: w.y, outside: false });
+        const mark = (iid: string, ppl: Person[], mx: number, my: number, exact: boolean) => {
+          const w = toWorld(mx, my);
+          const has = (p: Person, cs: string[]) => displayCategories(p).some((c) => cs.includes(c));
+          markers.push({
+            iid, x: w.x, y: w.y, count: ppl.length, exact,
+            dealers: ppl.filter((p) => has(p, ['Dealer', 'Street Dealer'])).length,
+            users: ppl.filter((p) => has(p, ['Drug User'])).length,
           });
-        });
+        };
+        exact.forEach(([iid, ppl]) => { const [ix, iy] = islandPoint(islandById.get(iid))!; mark(iid, ppl, ix, iy, true); });
         const ringR = list.length > 1 ? 8 + list.length * 3 : 0;
-        list.forEach(([, ppl], ii) => {
+        list.forEach(([iid, ppl], ii) => {
           const a = (ii / list.length) * Math.PI * 2 - Math.PI / 2;
-          const ix = ax + Math.cos(a) * ringR, iy = ay + Math.sin(a) * ringR;
-          const sorted = [...ppl].sort(rankSort);
-          const pr = sorted.length > 1 ? Math.max(3, sorted.length * 1.4) : 0;
-          sorted.forEach((p, k) => {
-            const b = (k / sorted.length) * Math.PI * 2 - Math.PI / 2;
-            const w = toWorld(ix + Math.cos(b) * pr, iy + Math.sin(b) * pr);
-            out.push({ p, x: w.x, y: w.y, outside: false });
-          });
+          mark(iid, ppl, ax + Math.cos(a) * ringR, ay + Math.sin(a) * ringR, false);
         });
       });
+      // One line per pair of linked islands
+      const seenP = new Set<string>();
+      const pmap = new Map<string, PairLink>();
+      persons.forEach((p) => (p.linkedPersonIds ?? []).forEach((tid) => {
+        const t = byId.get(tid);
+        if (!t || tid === p.id) return;
+        const key = [p.id, tid].sort().join('|');
+        if (seenP.has(key)) return;
+        seenP.add(key);
+        const ia = currentIslandId(p), ib = currentIslandId(t);
+        if (ia === ib) return;
+        const k2 = [ia, ib].sort().join('|');
+        const cur = pmap.get(k2) ?? { a: ia, b: ib, count: 0 };
+        cur.count += 1; pmap.set(k2, cur);
+      }));
+      mapPairs.push(...pmap.values());
     } else {
       // Island bubbles: each island's people sit inside its own circle
       const byIsland = new Map<string, Person[]>();
@@ -188,7 +201,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
       const cur = pm.get(key) ?? { a: ia, b: ib, count: 0 };
       cur.count += 1; pm.set(key, cur);
     });
-    return { nodes: out, edges: es, bubbles, pairs: [...pm.values()] };
+    return { nodes: out, edges: es, bubbles, pairs: [...pm.values()], markers, mapPairs };
   }, [persons, islands, islandId, isMap]);
 
   const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.p.id, n])), [nodes]);
@@ -203,21 +216,15 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
   // Starting view: in Map view zoom to the chosen island's people, else show everything
   const homeView = (): View => {
     if (isMap && islandId) {
-      const here = nodes.filter((n) => currentIslandId(n.p) === islandId);
-      if (here.length) {
-        const cx = here.reduce((t, n) => t + n.x, 0) / here.length;
-        const cy = here.reduce((t, n) => t + n.y, 0) / here.length;
-        // islands with an exact position (Thaa) are tiny on the country map, so zoom further
-        const k = islandPoint(islands.find((i) => i.id === islandId)) ? 55 : 20;
-        return { k, x: W / 2 - cx * k, y: H / 2 - cy * k };
-      }
+      const m = markers.find((mk) => mk.iid === islandId);
+      if (m) { const k = m.exact ? 40 : 14; return { k, x: W / 2 - m.x * k, y: H / 2 - m.y * k }; }
       const isl = islands.find((i) => i.id === islandId);
       const at = islandAtoll(isl);
       if (at) { const w = toWorld(...ATOLL_ANCHORS[at]); const k = 8; return { k, x: W / 2 - w.x * k, y: H / 2 - w.y * k }; }
     }
     return { x: 0, y: 0, k: 1 };
   };
-  useEffect(() => { setView(homeView()); setSelected(null); }, [islandId, isMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setView(homeView()); setSelected(null); setSelIsland(null); }, [islandId, isMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- zoom / pan ----------
   const unit = () => {
@@ -286,8 +293,12 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
     pointers.current.delete(e.pointerId);
     if (pointers.current.size === 0) gesture.current = null;
     if (wasTap && e.type === 'pointerup') {
-      const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-pid]');
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const isle = el?.closest('[data-iid]');
+      if (isle) { setSelIsland(isle.getAttribute('data-iid')); setSelected(null); return; }
+      const hit = el?.closest('[data-pid]');
       setSelected(hit ? hit.getAttribute('data-pid') : null);
+      setSelIsland(null);
     }
   };
 
@@ -341,6 +352,30 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
               </g>
             </g>
           )}
+          {isMap && linkFilter !== 'same' && mapPairs.map((pl) => {
+            const A = markers.find((m) => m.iid === pl.a), B = markers.find((m) => m.iid === pl.b);
+            if (!A || !B) return null;
+            const focus = selIsland ?? islandId;
+            const hot = !!focus && (pl.a === focus || pl.b === focus);
+            return (
+              <line key={'mp' + pl.a + pl.b} x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke={PURPLE}
+                strokeWidth={(1.4 + Math.min(pl.count, 6) * 0.55) / view.k} strokeDasharray={`${5 / view.k} ${3 / view.k}`} strokeLinecap="round"
+                opacity={focus && !hot ? 0.15 : 0.85} style={{ pointerEvents: 'none' }} />
+            );
+          })}
+          {isMap && markers.map((m) => {
+            const r = (8 + Math.min(m.count, 40) * 0.28) / view.k;
+            const on = m.iid === selIsland || m.iid === islandId;
+            const focus = selIsland ?? islandId;
+            const linked = !focus || on || mapPairs.some((pl) => (pl.a === focus && pl.b === m.iid) || (pl.b === focus && pl.a === m.iid));
+            return (
+              <g key={'mk' + m.iid} data-iid={m.iid} style={{ cursor: 'pointer' }} opacity={linked ? 1 : 0.35}>
+                <circle cx={m.x} cy={m.y} r={r + 8 / view.k} fill="transparent" />
+                {on && <circle cx={m.x} cy={m.y} r={r + 3.5 / view.k} fill="none" stroke="var(--accent)" strokeWidth={2.2 / view.k} />}
+                <circle cx={m.x} cy={m.y} r={r} fill={m.dealers ? RED : 'var(--accent)'} stroke="#fff" strokeWidth={1.6 / view.k} />
+              </g>
+            );
+          })}
           {!isMap && bubbles.map((b) => (
             <circle key={'b' + b.iid} cx={b.x} cy={b.y} r={b.r} fill="var(--bubble)" stroke={b.main ? 'var(--accent)' : 'var(--bubble-edge)'}
               strokeWidth={b.main ? 1.6 : 1} style={{ pointerEvents: 'none' }} />
@@ -438,7 +473,24 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
               <div key={'i' + n} className={`map-label island ${left ? 'left' : ''}`} style={{ left: q.x + (left ? -7 : 7), top: q.y - 9 }}>{n}</div>,
             );
           });
-          if (nodes.some((n) => islandAtoll(islands.find((i) => i.id === currentIslandId(n.p))) === undefined)) {
+          markers.forEach((m) => {
+            const q = at(m.x, m.y);
+            if (!inView(q)) return;
+            const r = 8 + Math.min(m.count, 40) * 0.28;
+            out.push(<div key={'mc' + m.iid} className="marker-count" style={{ left: q.x, top: q.y }}>{m.count}</div>);
+            if (!m.exact) out.push( // Thaa islands are already named on the map when zoomed in
+              <div key={'mn' + m.iid} dir="auto" className="marker-name" style={{ left: q.x, top: q.y + r * sc + 2 }}>{islandName(m.iid)}</div>,
+            );
+          });
+          if (linkFilter !== 'same') mapPairs.forEach((pl) => {
+            const A = markers.find((m) => m.iid === pl.a), B = markers.find((m) => m.iid === pl.b);
+            if (!A || !B) return;
+            const q = at((A.x + B.x) / 2, (A.y + B.y) / 2);
+            const pa = at(A.x, A.y), pb = at(B.x, B.y);
+            if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < 48) return; // too short to label without covering the markers
+            if (inView(q)) out.push(<div key={'pc' + pl.a + pl.b} className="pair-count" style={{ left: q.x, top: q.y }}>{pl.count}</div>);
+          });
+          if (markers.some((m) => islandAtoll(islands.find((i) => i.id === m.iid)) === undefined)) {
             const w = toWorld(MAP_W + 70, 455);
             const q = at(w.x, w.y);
             if (inView(q)) out.push(<div key="none" className="map-label none" style={{ left: q.x, top: q.y }}>Atoll not set</div>);
@@ -497,6 +549,26 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
         </button>
       </div>
 
+      {isMap && selIsland && (() => {
+        const m = markers.find((mk) => mk.iid === selIsland);
+        if (!m) return null;
+        const links = mapPairs.filter((pl) => pl.a === m.iid || pl.b === m.iid);
+        return (
+          <div className="net-sheet">
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div dir="auto" style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{islandName(m.iid)}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                {m.count} {m.count === 1 ? 'person' : 'people'} · {m.dealers} dealer{m.dealers === 1 ? '' : 's'} · {m.users} user{m.users === 1 ? '' : 's'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                {links.length ? `Linked to ${links.length} island${links.length === 1 ? '' : 's'} (${links.reduce((t, l) => t + l.count, 0)} links)` : 'No links to other islands'}
+              </div>
+            </div>
+            {onOpenIsland && <button className="btn btn-primary" onClick={() => { onOpenIsland(m.iid); setMode('network'); }}>Open network</button>}
+            <button className="icon-btn" aria-label="Close" onClick={() => setSelIsland(null)}><X size={16} /></button>
+          </div>
+        );
+      })()}
       {sel && (
         <div className="net-sheet">
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -526,7 +598,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
         ))}
       </div>
       <div className="field-hint" style={{ marginTop: 6 }}>
-        Pinch or use +/− to zoom, drag to move. Tap a person to highlight their connections, then Edit. {isMap ? 'Map shows everyone on the atoll of their present island — zoom in to see names. Set each island\'s atoll in the Islands tab.' : 'Each circle is an island. Lines inside a circle link people on the same island; purple lines link people on different islands (the number is how many links). Tap a person to see their own links. Green ring: moved here from another island.'}
+        Pinch or use +/− to zoom, drag to move. Tap a person to highlight their connections, then Edit. {isMap ? 'Each marker is an island (number = people living there now; red = has dealers). Purple lines join islands whose people are linked. Tap an island, then Open network to see its people. Set each island\'s atoll in the Islands tab.' : 'Each circle is an island. Lines inside a circle link people on the same island; purple lines link people on different islands (the number is how many links). Tap a person to see their own links. Green ring: moved here from another island.'}
       </div>
       {editing && sel && (
         <EditNetwork person={sel} persons={persons} islands={islands} onClose={() => setEditing(false)} />
