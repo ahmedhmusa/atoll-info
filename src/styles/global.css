@@ -460,6 +460,8 @@ button:disabled { opacity: 0.45; }
 .atoll-head .atoll-name { font-size: 17px; font-weight: 700; }
 .atoll-head .atoll-meta { font-size: 12.5px; color: var(--text-dim); margin-left: auto; }
 .atoll-head.none .atoll-name { color: var(--warn); }
+.island-subhead { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; color: var(--text-dim); margin: 6px 4px 6px; display: flex; align-items: center; gap: 6px; }
+.island-subhead span { font-size: 10.5px; background: var(--card2); border-radius: 999px; padding: 1px 7px; }
 .net-ctrl { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 8px; }
 .net-ctrl .icon-btn { width: 40px; min-width: 40px; height: 40px; padding: 0; }
 .net-sheet {

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, ChevronRight, X, Expand } from 'lucide-react';
+import { Plus, ChevronRight, ChevronDown, X, Expand } from 'lucide-react';
 import { useStore, newRecord, touchRecord } from '../state/store';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
@@ -8,7 +8,8 @@ import Avatar from '../components/Avatar';
 import PhotoField from '../components/PhotoField';
 import PhotoLightbox from '../components/PhotoLightbox';
 import { formatDate } from '../lib/util';
-import { displayName, displayCategories, onIsland, livesAway } from '../lib/personDisplay';
+import { displayName, displayCategories, onIsland, livesAway, currentIslandId } from '../lib/personDisplay';
+import { ATOLLS, islandAtoll } from '../lib/maldivesMap';
 import type { Person, PersonCategory, DrugType, FlagStatus } from '../types';
 
 const CATEGORIES: PersonCategory[] = ['Dealer', 'Street Dealer', 'Carrier', 'Drug User', 'Theft', 'Person of Interest'];
@@ -44,6 +45,26 @@ const Persons: React.FC = () => {
 
   const clearCategoryFilter = () => { setCategory(''); setSearchParams({}); };
 
+  // Group by the atoll, then island, each person lives on now (north to south; no atoll last)
+  const [onlyAtoll, setOnlyAtoll] = useState('');
+  const [folded, setFolded] = useState<Set<string>>(new Set());
+  const toggleFold = (code: string) => setFolded((f) => { const n = new Set(f); if (n.has(code)) n.delete(code); else n.add(code); return n; });
+  const groups = useMemo(() => {
+    const atollOf = (p: Person) => islandAtoll(data.islands.find((i) => i.id === currentIslandId(p))) ?? '_none';
+    const list = [...ATOLLS.map((a) => ({ code: a.code as string, name: a.name })), { code: '_none', name: 'Atoll not set' }];
+    return list.map((g) => {
+      const people = filtered.filter((p) => atollOf(p) === g.code);
+      const byIsl = new Map<string, Person[]>();
+      people.forEach((p) => { const iid = currentIslandId(p); byIsl.set(iid, [...(byIsl.get(iid) ?? []), p]); });
+      const isles = [...byIsl.entries()]
+        .map(([iid, ps]) => ({ iid, name: data.islands.find((i) => i.id === iid)?.name ?? '—', people: [...ps].sort((a, b) => displayName(a).localeCompare(displayName(b))) }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      return { ...g, people, isles };
+    }).filter((g) => g.people.length > 0);
+  }, [filtered, data.islands]);
+  const shown = groups.filter((g) => !onlyAtoll || g.code === onlyAtoll);
+  const has = (p: Person, cs: string[]) => displayCategories(p).some((c) => cs.includes(c));
+
   return (
     <div style={{ position: 'relative', minHeight: '60vh' }}>
       <div className="section-title">Persons</div>
@@ -69,7 +90,30 @@ const Persons: React.FC = () => {
         </div>
       )}
 
-      {filtered.map((p) => (
+      {groups.length > 0 && (
+        <div className="pill-row atoll-chips">
+          <button className={`pill ${!onlyAtoll ? 'active' : ''}`} onClick={() => setOnlyAtoll('')}>All</button>
+          {groups.map((g) => (
+            <button key={g.code} className={`pill ${onlyAtoll === g.code ? 'active' : ''}`} onClick={() => setOnlyAtoll(onlyAtoll === g.code ? '' : g.code)}>
+              {g.code === '_none' ? 'Not set' : g.name} <span className="chip-count">{g.people.length}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {shown.map((g) => {
+        const isFolded = folded.has(g.code) && !q.trim();
+        return (
+          <div key={g.code} className="atoll-group">
+            <button className={`atoll-head ${g.code === '_none' ? 'none' : ''}`} onClick={() => toggleFold(g.code)} aria-expanded={!isFolded}>
+              {isFolded ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+              <span className="atoll-name">{g.name}</span>
+              <span className="atoll-meta">{g.people.length} {g.people.length === 1 ? 'person' : 'people'} · <b style={{ color: 'var(--danger)' }}>{g.people.filter((p) => has(p, ['Dealer', 'Street Dealer'])).length}</b> sellers · <b style={{ color: 'var(--accent)' }}>{g.people.filter((p) => has(p, ['Drug User'])).length}</b> users</span>
+            </button>
+            {!isFolded && g.isles.map((isl) => (
+              <div key={isl.iid}>
+                <div className="island-subhead" dir="auto">{isl.name} <span>{isl.people.length}</span></div>
+                {isl.people.map((p) => (
         <div key={p.id} className="list-item" style={{ cursor: 'pointer' }} onClick={() => setSel(p)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
             <Avatar src={p.photoDataUrl} />
@@ -86,6 +130,11 @@ const Persons: React.FC = () => {
           <ChevronRight size={18} className="li-chevron" />
         </div>
       ))}
+              </div>
+            ))}
+          </div>
+        );
+      })}
       {filtered.length === 0 && <div className="empty-state">No persons match this filter — tap + to add one.</div>}
 
       {sel && (
