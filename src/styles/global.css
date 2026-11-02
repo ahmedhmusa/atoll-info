@@ -462,6 +462,16 @@ button:disabled { opacity: 0.45; }
 .atoll-head.none .atoll-name { color: var(--warn); }
 .island-subhead { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; color: var(--text-dim); margin: 6px 4px 6px; display: flex; align-items: center; gap: 6px; }
 .island-subhead span { font-size: 10.5px; background: var(--card2); border-radius: 999px; padding: 1px 7px; }
+.island-row {
+  width: 100%; display: flex; align-items: center; gap: 8px; border: none; text-align: left; color: var(--text);
+  background: var(--card); border-radius: var(--radius); padding: 12px 13px; margin-bottom: 8px; min-height: 50px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.island-row .ir-name { font-size: 15.5px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.island-row .ir-meta { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.island-row .ir-count { font-size: 12px; font-weight: 700; background: var(--card2); border-radius: 999px; padding: 2px 9px; }
+.island-row.open { background: color-mix(in srgb, var(--accent) 10%, var(--card)); }
+.island-row + .list-item, .island-row.open ~ .list-item { margin-left: 14px; }
 .net-ctrl { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 8px; }
 .net-ctrl .icon-btn { width: 40px; min-width: 40px; height: 40px; padding: 0; }
 .net-sheet {

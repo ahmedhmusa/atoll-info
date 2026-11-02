@@ -48,6 +48,9 @@ const Persons: React.FC = () => {
   // Group by the atoll, then island, each person lives on now (north to south; no atoll last)
   const [onlyAtoll, setOnlyAtoll] = useState('');
   const [folded, setFolded] = useState<Set<string>>(new Set());
+  // Islands start closed (tap to open), so a big atoll stays easy to scan
+  const [openIsles, setOpenIsles] = useState<Set<string>>(new Set());
+  const toggleIsle = (iid: string) => setOpenIsles((f) => { const n = new Set(f); if (n.has(iid)) n.delete(iid); else n.add(iid); return n; });
   const toggleFold = (code: string) => setFolded((f) => { const n = new Set(f); if (n.has(code)) n.delete(code); else n.add(code); return n; });
   const groups = useMemo(() => {
     const atollOf = (p: Person) => islandAtoll(data.islands.find((i) => i.id === currentIslandId(p))) ?? '_none';
@@ -112,8 +115,20 @@ const Persons: React.FC = () => {
             </button>
             {!isFolded && g.isles.map((isl) => (
               <div key={isl.iid}>
-                <div className="island-subhead" dir="auto">{isl.name} <span>{isl.people.length}</span></div>
-                {isl.people.map((p) => (
+                {(() => {
+                  const open = openIsles.has(isl.iid) || !!q.trim() || !!category || !!islandId;
+                  const sl = isl.people.filter((p) => has(p, ['Dealer', 'Street Dealer'])).length;
+                  const us = isl.people.filter((p) => has(p, ['Drug User'])).length;
+                  return (
+                    <button className={`island-row ${open ? 'open' : ''}`} onClick={() => toggleIsle(isl.iid)} aria-expanded={open}>
+                      {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      <span className="ir-name" dir="auto">{isl.name}</span>
+                      <span className="ir-meta"><b style={{ color: 'var(--danger)' }}>{sl}</b> sellers · <b style={{ color: 'var(--accent)' }}>{us}</b> users</span>
+                      <span className="ir-count">{isl.people.length}</span>
+                    </button>
+                  );
+                })()}
+                {(openIsles.has(isl.iid) || !!q.trim() || !!category || !!islandId) && isl.people.map((p) => (
         <div key={p.id} className="list-item" style={{ cursor: 'pointer' }} onClick={() => setSel(p)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
             <Avatar src={p.photoDataUrl} />
