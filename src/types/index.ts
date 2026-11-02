@@ -29,7 +29,8 @@ export interface Person extends AuditFields {
   address?: string; // permanent address
   presentAddress?: string; // current/present address, if different
   contactNumber?: string;
-  islandId: ID;
+  islandId: ID; // home island (permanent address)
+  presentIslandId?: ID; // island they live on now, if different
   categories: PersonCategory[]; // multi-select
   drugTypes: DrugType[]; // multi-select
   networkConnections?: string; // free text — known associates/supply chain links, incl. those not tracked as Person records

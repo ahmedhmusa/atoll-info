@@ -11,7 +11,7 @@ const Islands: React.FC = () => {
   const [editing, setEditing] = useState<Island | 'new' | null>(null);
 
   const rows = data.islands.map((isl) => {
-    const here = data.persons.filter((p) => p.islandId === isl.id);
+    const here = data.persons.filter((p) => p.islandId === isl.id || p.presentIslandId === isl.id);
     return {
       island: isl,
       sellers: here.filter((p) => (p.categories ?? []).some((c) => c === 'Dealer' || c === 'Street Dealer')),

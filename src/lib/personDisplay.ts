@@ -75,3 +75,18 @@ export function personChainRank(p: any): number | null {
   const ranks = cats.map((c) => CHAIN_RANK[c]).filter((r): r is number => r !== undefined);
   return ranks.length ? Math.min(...ranks) : null;
 }
+
+/** Island the person lives on now (present island if set, else home island). */
+export function currentIslandId(p: any): string {
+  return p.presentIslandId || p.islandId;
+}
+
+/** True when the person currently lives away from their home island. */
+export function livesAway(p: any): boolean {
+  return !!p.presentIslandId && p.presentIslandId !== p.islandId;
+}
+
+/** Belongs to an island by home OR present address. */
+export function onIsland(p: any, islandId: string): boolean {
+  return p.islandId === islandId || p.presentIslandId === islandId;
+}

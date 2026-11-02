@@ -4,7 +4,7 @@ import { Plus, Minus, Maximize2, Minimize2, LocateFixed, Pencil, X } from 'lucid
 import type { Person, Island, PersonCategory } from '../types';
 import { useStore, touchRecord } from '../state/store';
 import {
-  displayCategories, shortLabel, displayName, personChainRank, categoryColor,
+  displayCategories, shortLabel, displayName, personChainRank, categoryColor, currentIslandId, livesAway,
 } from '../lib/personDisplay';
 import Modal from './Modal';
 import Badge from './Badge';
@@ -46,22 +46,27 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
     const rankSort = (a: Person, b: Person) => (personChainRank(a) ?? 9) - (personChainRank(b) ?? 9);
     const out: Node[] = [];
     const ring = (list: Person[], cx: number, cy: number, r: number, outside?: boolean) => {
+      // outer ring is rotated half a step so its people sit between the inner ones
+      const offset = outside ? Math.PI / Math.max(list.length, 2) + 0.35 : 0;
       list.forEach((p, i) => {
-        const ang = (i / Math.max(list.length, 1)) * Math.PI * 2 - Math.PI / 2;
+        const ang = (i / Math.max(list.length, 1)) * Math.PI * 2 - Math.PI / 2 + offset;
         out.push({ p, x: cx + Math.cos(ang) * r, y: cy + Math.sin(ang) * r, outside });
       });
     };
     if (islandId) {
-      const here = persons.filter((p) => p.islandId === islandId).sort(rankSort);
+      // Main ring: everyone living on this island now (incl. people who moved here)
+      const here = persons.filter((p) => currentIslandId(p) === islandId).sort(rankSort);
       ring(here, W / 2, H / 2, here.length > 1 ? Math.min(Math.max(60, (here.length * 38) / (Math.PI * 2)), 120) : 0);
       const ids = new Set(here.map((p) => p.id));
       const ext = new Set<string>();
+      // Outer ring: people from this island who now live elsewhere, plus linked outsiders
+      persons.forEach((p) => { if (!ids.has(p.id) && p.islandId === islandId) ext.add(p.id); });
       here.forEach((p) => (p.linkedPersonIds ?? []).forEach((id) => { if (!ids.has(id) && byId.has(id)) ext.add(id); }));
       persons.forEach((p) => { if (!ids.has(p.id) && (p.linkedPersonIds ?? []).some((id) => ids.has(id))) ext.add(p.id); });
-      ring([...ext].map((id) => byId.get(id)!), W / 2, H / 2, 165, true);
+      ring([...ext].map((id) => byId.get(id)!), W / 2, H / 2 - 6, 148, true);
     } else {
       const groups = islands
-        .map((i) => ({ i, list: persons.filter((p) => p.islandId === i.id).sort(rankSort) }))
+        .map((i) => ({ i, list: persons.filter((p) => currentIslandId(p) === i.id).sort(rankSort) }))
         .filter((g) => g.list.length > 0);
       groups.forEach((g, gi) => {
         const ang = (gi / Math.max(groups.length, 1)) * Math.PI * 2 - Math.PI / 2;
@@ -88,7 +93,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
         from = aUp ? p.id : tid; to = aUp ? tid : p.id;
         color = Math.min(ra, rb) === 0 ? RED : ORANGE;
       }
-      es.push({ a: p.id, b: tid, from, to, color, cross: p.islandId !== t.p.islandId });
+      es.push({ a: p.id, b: tid, from, to, color, cross: currentIslandId(p) !== currentIslandId(t.p) });
     }));
     return { nodes: out, edges: es };
   }, [persons, islands, islandId]);
@@ -230,6 +235,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
               <g key={p.id} data-pid={p.id} opacity={dim(p.id) ? 0.2 : 1} style={{ cursor: 'pointer' }}>
                 <circle cx={x} cy={y} r={R + 8} fill="transparent" />
                 {outside && <circle cx={x} cy={y} r={R + 3} fill="none" stroke={ORANGE} strokeDasharray="3 2" strokeWidth={1.5} />}
+                {!outside && livesAway(p) && <circle cx={x} cy={y} r={R + 3} fill="none" stroke="var(--ok)" strokeWidth={1.8} />}
                 {isSel && <circle cx={x} cy={y} r={R + 5} fill="none" stroke="var(--accent)" strokeWidth={2.5} />}
                 {cats.length <= 1 ? (
                   <circle cx={x} cy={y} r={R} fill={cats[0] ? categoryColor(cats[0]) : 'var(--text-dim)'} stroke="var(--card)" strokeWidth={1.5} />
@@ -248,11 +254,12 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
           {!islandId && (() => {
             const seenI = new Set<string>();
             return nodes.map(({ p, x, y }) => {
-              if (seenI.has(p.islandId)) return null;
-              seenI.add(p.islandId);
+              const ci = currentIslandId(p);
+              if (seenI.has(ci)) return null;
+              seenI.add(ci);
               return (
-                <text key={'l' + p.islandId} x={x} y={y - 24} textAnchor="middle" fontSize={10 / Math.sqrt(view.k)} fontWeight={700}
-                  fill="var(--text-dim)" style={{ pointerEvents: 'none' }}>{islandName(p.islandId)}</text>
+                <text key={'l' + ci} x={x} y={y - 24} textAnchor="middle" fontSize={10 / Math.sqrt(view.k)} fontWeight={700}
+                  fill="var(--text-dim)" style={{ pointerEvents: 'none' }}>{islandName(ci)}</text>
               );
             });
           })()}
@@ -294,7 +301,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName(sel)}</div>
             <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-              {islandName(sel.islandId)} · {neighbours.size} connection{neighbours.size === 1 ? '' : 's'}
+              {livesAway(sel) ? `${islandName(sel.islandId)} → ${islandName(sel.presentIslandId!)}` : islandName(sel.islandId)} · {neighbours.size} connection{neighbours.size === 1 ? '' : 's'}
             </div>
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
               {displayCategories(sel).map((c) => <Badge key={c} text={c} />)}
@@ -312,7 +319,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
     <>
       {full ? createPortal(<div className="net-full-overlay">{canvas}</div>, document.body) : canvas}
       <div className="field-hint" style={{ marginTop: 6 }}>
-        Pinch or use +/− to zoom, drag to move. Tap a person to highlight their connections, then Edit.
+        Pinch or use +/− to zoom, drag to move. Tap a person to highlight their connections, then Edit. Green ring: moved here from another island. Dashed ring: from another island or living elsewhere now.
       </div>
       {editing && sel && (
         <EditNetwork person={sel} persons={persons} islands={islands} onClose={() => setEditing(false)} />

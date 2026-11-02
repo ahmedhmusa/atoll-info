@@ -8,7 +8,7 @@ import Avatar from '../components/Avatar';
 import PhotoField from '../components/PhotoField';
 import PhotoLightbox from '../components/PhotoLightbox';
 import { formatDate } from '../lib/util';
-import { displayName, displayCategories } from '../lib/personDisplay';
+import { displayName, displayCategories, onIsland, livesAway } from '../lib/personDisplay';
 import type { Person, PersonCategory, DrugType, FlagStatus } from '../types';
 
 const CATEGORIES: PersonCategory[] = ['Dealer', 'Street Dealer', 'Carrier', 'Drug User', 'Theft', 'Person of Interest'];
@@ -33,7 +33,7 @@ const Persons: React.FC = () => {
 
   const filtered = useMemo(() => {
     return data.persons
-      .filter((p) => !islandId || p.islandId === islandId)
+      .filter((p) => !islandId || onIsland(p, islandId))
       .filter((p) => !category || displayCategories(p).includes(category as PersonCategory))
       .filter((p) => {
         if (!q.trim()) return true;
@@ -75,7 +75,7 @@ const Persons: React.FC = () => {
             <Avatar src={p.photoDataUrl} />
             <div className="li-main">
               <div className="li-title">{displayName(p)}{p.nickname ? ` "${p.nickname}"` : ''}</div>
-              <div className="li-sub">{islandName(p.islandId)}{p.flagStatus && p.flagStatus !== 'None' ? ` · ${p.flagStatus}` : ''}</div>
+              <div className="li-sub">{islandName(p.islandId)}{livesAway(p) ? ` → now ${islandName(p.presentIslandId!)}` : ''}{p.flagStatus && p.flagStatus !== 'None' ? ` · ${p.flagStatus}` : ''}</div>
               {displayCategories(p).length > 0 && (
                 <div className="tag-row">
                   {displayCategories(p).map((c) => <span key={c} className={`tag badge-${categoryKind(c)}`}>{c}</span>)}
@@ -111,7 +111,7 @@ const Persons: React.FC = () => {
             )}
             <div style={{ flex: 1 }}>
               {sel.nickname && <div className="section-sub" style={{ margin: 0 }}>"{sel.nickname}"</div>}
-              <div className="section-sub" style={{ margin: 0 }}>{islandName(sel.islandId)}</div>
+              <div className="section-sub" style={{ margin: 0 }}>{islandName(sel.islandId)}{livesAway(sel) ? ` · now living in ${islandName(sel.presentIslandId!)}` : ''}</div>
               {sel.idCardNumber && <div className="section-sub" style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>ID: {sel.idCardNumber}</div>}
             </div>
           </div>
@@ -207,6 +207,7 @@ const PersonForm: React.FC<{ existing: Person | null; onClose: () => void; onSav
   const [presentAddress, setPresentAddress] = useState(existing?.presentAddress ?? '');
   const [contactNumber, setContactNumber] = useState(existing?.contactNumber ?? '');
   const [islandId, setIslandId] = useState(existing?.islandId ?? data.islands[0]?.id ?? '');
+  const [presentIslandId, setPresentIslandId] = useState(existing?.presentIslandId ?? '');
   const [categories, setCategories] = useState<PersonCategory[]>(existing ? displayCategories(existing) : []);
   const [drugTypes, setDrugTypes] = useState<DrugType[]>(existing?.drugTypes ?? []);
   const [networkConnections, setNetworkConnections] = useState(existing?.networkConnections ?? '');
@@ -221,7 +222,7 @@ const PersonForm: React.FC<{ existing: Person | null; onClose: () => void; onSav
 
   const save = () => {
     if (!fullName.trim() || !islandId) return;
-    const base = { fullName, nickname, idCardNumber, dateOfBirth, address, presentAddress, contactNumber, islandId, categories, drugTypes, networkConnections, linkedPersonIds, notes, flagStatus, photoDataUrl, idPhotoDataUrl };
+    const base = { fullName, nickname, idCardNumber, dateOfBirth, address, presentAddress, contactNumber, islandId, presentIslandId: presentIslandId && presentIslandId !== islandId ? presentIslandId : undefined, categories, drugTypes, networkConnections, linkedPersonIds, notes, flagStatus, photoDataUrl, idPhotoDataUrl };
     const record: Person = existing ? touchRecord({ ...existing, ...base }) : { ...newRecord(), ...base };
     onSave(record);
   };
@@ -236,14 +237,22 @@ const PersonForm: React.FC<{ existing: Person | null; onClose: () => void; onSav
       <div className="field"><label>ID Card Number</label><input value={idCardNumber} onChange={(e) => setIdCardNumber(e.target.value)} /></div>
       <div className="field"><label>Date of Birth</label><input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} /></div>
       <div className="field"><label>Permanent Address</label><textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} /></div>
-      <div className="field"><label>Present Address</label><textarea value={presentAddress} onChange={(e) => setPresentAddress(e.target.value)} rows={2} placeholder="Leave blank if same as permanent address" /></div>
-      <div className="field"><label>Contact Number</label><input type="tel" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} placeholder="e.g. +960 7XX XXXX" /></div>
       <div className="field">
-        <label>Island *</label>
+        <label>Home Island (permanent) *</label>
         <select value={islandId} onChange={(e) => setIslandId(e.target.value)}>
           {data.islands.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
         </select>
       </div>
+      <div className="field"><label>Present Address</label><textarea value={presentAddress} onChange={(e) => setPresentAddress(e.target.value)} rows={2} placeholder="Leave blank if same as permanent address" /></div>
+      <div className="field">
+        <label>Present Island</label>
+        <select value={presentIslandId} onChange={(e) => setPresentIslandId(e.target.value)}>
+          <option value="">Same as home island</option>
+          {data.islands.filter((i) => i.id !== islandId).map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+        </select>
+        <div className="field-hint">Where they live now. The drug network shows them on this island.</div>
+      </div>
+      <div className="field"><label>Contact Number</label><input type="tel" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} placeholder="e.g. +960 7XX XXXX" /></div>
 
       <div className="field">
         <label>Category (select any that apply)</label>

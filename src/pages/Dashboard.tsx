@@ -15,7 +15,7 @@ const Dashboard: React.FC = () => {
   const [adding, setAdding] = useState(false);
 
   const byIsland = <T extends { islandId?: string }>(list: T[]) => (islandId ? list.filter((x) => x.islandId === islandId) : list);
-  const fp = byIsland(data.persons);
+  const fp = islandId ? data.persons.filter((p) => p.islandId === islandId || p.presentIslandId === islandId) : data.persons;
   const fi = byIsland(data.informants);
   const fr = byIsland(data.reports);
   const dealers = fp.filter((p) => (p.categories ?? []).includes('Dealer'));
