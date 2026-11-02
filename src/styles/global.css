@@ -27,6 +27,8 @@
   --glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(0, 0, 0, 0.03);
   --blur: blur(22px) saturate(185%);
 
+  --bubble: rgba(0, 122, 255, 0.05);
+  --bubble-edge: rgba(60, 60, 67, 0.22);
   --map-land: #c8d4e6;
   --map-edge: #9fb1cc;
   --map-lagoon: #dfe9f5;
@@ -70,6 +72,8 @@
     --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
     --glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -1px 0 rgba(0, 0, 0, 0.25);
 
+    --bubble: rgba(10, 132, 255, 0.08);
+    --bubble-edge: rgba(235, 235, 245, 0.2);
     --map-land: #34425a;
     --map-edge: #4b5d7c;
     --map-lagoon: #1d3550;
@@ -413,6 +417,15 @@ button:disabled { opacity: 0.45; }
 .map-label.left { transform: translate(-100%, -50%); }
 .map-label.island { font-size: 11.5px; font-style: italic; color: var(--text); opacity: 0.8; }
 .map-label.none { transform: translate(-50%, -50%); color: var(--warn); }
+.bubble-label {
+  position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font-size: 12px; font-weight: 700;
+  color: var(--text-dim); text-shadow: 0 0 3px var(--bg); display: inline-flex; align-items: center; gap: 4px;
+}
+.bubble-label span { font-size: 10px; font-weight: 700; color: var(--text-dim); background: var(--card2); border-radius: 999px; padding: 1px 6px; }
+.bubble-label.main { color: var(--accent); font-size: 13px; }
+.link-filter { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.link-filter > span { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.02em; margin-right: 2px; }
+.link-filter .pill { padding: 6px 11px; font-size: 13px; }
 .net-ctrl { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 8px; }
 .net-ctrl .icon-btn { width: 40px; min-width: 40px; height: 40px; padding: 0; }
 .net-sheet {
