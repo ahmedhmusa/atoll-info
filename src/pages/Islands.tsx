@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, ChevronRight, Pencil, Trash2, MapPin } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Plus, ChevronRight, ChevronDown, Pencil, Trash2, MapPin, Search } from 'lucide-react';
 import { useStore } from '../state/store';
 import { newId } from '../lib/util';
 import { ATOLLS, atollName, guessAtoll, islandAtoll } from '../lib/maldivesMap';
@@ -24,6 +24,27 @@ const Islands: React.FC = () => {
 
   const sel = rows.find((r) => r.island.id === selId);
 
+  // Group islands by atoll, north to south; islands without an atoll go last
+  const [q, setQ] = useState('');
+  const [onlyAtoll, setOnlyAtoll] = useState('');
+  const [folded, setFolded] = useState<Set<string>>(new Set());
+  const groups = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    const list = [...ATOLLS.map((a) => ({ code: a.code as string, name: a.name })), { code: '_none', name: 'Atoll not set' }];
+    return list
+      .map((g) => ({
+        ...g,
+        all: rows.filter((r) => (islandAtoll(r.island) ?? '_none') === g.code).sort((x, y) => x.island.name.localeCompare(y.island.name)),
+      }))
+      .filter((g) => g.all.length > 0)
+      .map((g) => ({
+        ...g,
+        rows: g.all.filter((r) => !t || r.island.name.toLowerCase().includes(t) || g.name.toLowerCase().includes(t)),
+      }));
+  }, [rows, q]);
+  const shown = groups.filter((g) => g.rows.length > 0 && (!onlyAtoll || g.code === onlyAtoll));
+  const toggleFold = (code: string) => setFolded((f) => { const n = new Set(f); if (n.has(code)) n.delete(code); else n.add(code); return n; });
+
   const doClearAll = async () => {
     if (!confirm(`Remove all ${data.islands.length} islands? Persons, informants, and reports that reference them will show "Unknown Island" until reassigned.`)) return;
     if (!confirm('Are you sure? This cannot be undone.')) return;
@@ -35,10 +56,38 @@ const Islands: React.FC = () => {
       <div className="section-title">Islands</div>
       <div className="section-sub">Suspected sellers and users, tracked separately per island.</div>
 
-      {rows.map((r) => (
+      {rows.length > 0 && (
+        <>
+          <div className="field" style={{ position: 'relative' }}>
+            <Search size={16} style={{ position: 'absolute', left: 13, top: 15, color: 'var(--text-dim)' }} />
+            <input placeholder="Search island or atoll" value={q} onChange={(e) => setQ(e.target.value)} style={{ paddingLeft: 36 }} />
+          </div>
+          <div className="pill-row atoll-chips">
+            <button className={`pill ${!onlyAtoll ? 'active' : ''}`} onClick={() => setOnlyAtoll('')}>All</button>
+            {groups.map((g) => (
+              <button key={g.code} className={`pill ${onlyAtoll === g.code ? 'active' : ''}`} onClick={() => setOnlyAtoll(onlyAtoll === g.code ? '' : g.code)}>
+                {g.code === '_none' ? 'Not set' : g.name} <span className="chip-count">{g.all.length}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {shown.map((g) => {
+        const isFolded = folded.has(g.code) && !q.trim();
+        const sellers = g.rows.reduce((t, r) => t + r.sellers.length, 0);
+        const users = g.rows.reduce((t, r) => t + r.users.length, 0);
+        return (
+          <div key={g.code} className="atoll-group">
+            <button className={`atoll-head ${g.code === '_none' ? 'none' : ''}`} onClick={() => toggleFold(g.code)} aria-expanded={!isFolded}>
+              {isFolded ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+              <span className="atoll-name">{g.name}</span>
+              <span className="atoll-meta">{g.rows.length} island{g.rows.length === 1 ? '' : 's'} · <b style={{ color: 'var(--danger)' }}>{sellers}</b> sellers · <b style={{ color: 'var(--accent)' }}>{users}</b> users</span>
+            </button>
+            {!isFolded && g.rows.map((r) => (
         <div key={r.island.id} className="list-item" style={{ cursor: 'pointer' }} onClick={() => setSelId(r.island.id)}>
           <div className="li-main">
-            <div className="li-title">{r.island.name}<span style={{ fontWeight: 400, color: 'var(--text-dim)', fontSize: 13 }}> · {atollName(islandAtoll(r.island))}</span></div>
+            <div className="li-title">{r.island.name}</div>
             <div className="li-sub" style={{ display: 'flex', gap: 12, marginTop: 4 }}>
               <span style={{ color: 'var(--danger)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--danger)', display: 'inline-block' }} />
@@ -53,6 +102,10 @@ const Islands: React.FC = () => {
           <ChevronRight size={18} className="li-chevron" />
         </div>
       ))}
+          </div>
+        );
+      })}
+      {rows.length > 0 && shown.length === 0 && <div className="empty-state">No islands match.</div>}
       {rows.length === 0 && (
         <div className="empty-state">
           <MapPin size={28} style={{ marginBottom: 8, opacity: 0.5 }} />

@@ -450,6 +450,16 @@ button:disabled { opacity: 0.45; }
 .dir-seg { display: flex; background: var(--card2); border-radius: 999px; padding: 2px; flex-shrink: 0; }
 .dir-seg button { border: none; background: none; font-size: 11px; font-weight: 600; color: var(--text-dim); padding: 5px 7px; border-radius: 999px; }
 .dir-seg button.on { background: #a259d9; color: #fff; }
+.atoll-chips { margin: -4px 0 14px; }
+.chip-count { font-size: 11px; opacity: 0.7; margin-left: 2px; }
+.atoll-group { margin-bottom: 10px; }
+.atoll-head {
+  width: 100%; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; border: none; background: none;
+  padding: 8px 4px; color: var(--text); text-align: left;
+}
+.atoll-head .atoll-name { font-size: 17px; font-weight: 700; }
+.atoll-head .atoll-meta { font-size: 12.5px; color: var(--text-dim); margin-left: auto; }
+.atoll-head.none .atoll-name { color: var(--warn); }
 .net-ctrl { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 8px; }
 .net-ctrl .icon-btn { width: 40px; min-width: 40px; height: 40px; padding: 0; }
 .net-sheet {
