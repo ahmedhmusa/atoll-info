@@ -65,7 +65,7 @@ const Dashboard: React.FC = () => {
 
       <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginRight: 4 }}>
         <span>Open Tasks</span>
-        <button className="btn-ghost" onClick={() => setAdding(true)} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontSize: 15, fontWeight: 600, textTransform: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, padding: 0 }}>
+        <button className="btn-ghost" onClick={() => setAdding(true)} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontSize: 14, fontWeight: 600, textTransform: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, padding: 0 }}>
           <Plus size={17} strokeWidth={2.5} /> Add
         </button>
       </div>
