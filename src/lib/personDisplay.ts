@@ -90,3 +90,22 @@ export function livesAway(p: any): boolean {
 export function onIsland(p: any, islandId: string): boolean {
   return p.islandId === islandId || p.presentIslandId === islandId;
 }
+
+/**
+ * Which way drugs flow on a link between p and t:
+ * 'pt' = p supplies t, 'tp' = t supplies p, null = unknown.
+ * A direction the officer set always wins; otherwise it is guessed from
+ * categories (Dealer -> Street Dealer / Carrier -> Drug User).
+ */
+export function flowDir(p: any, t: any): 'pt' | 'tp' | null {
+  if ((p.supplies ?? []).includes(t.id)) return 'pt';
+  if ((t.supplies ?? []).includes(p.id)) return 'tp';
+  const rp = personChainRank(p), rt = personChainRank(t);
+  if (rp === null || rt === null || rp === rt) return null;
+  return rp < rt ? 'pt' : 'tp';
+}
+
+/** True when the officer has set the direction for this link (not guessed). */
+export function flowIsSet(p: any, t: any): boolean {
+  return (p.supplies ?? []).includes(t.id) || (t.supplies ?? []).includes(p.id);
+}

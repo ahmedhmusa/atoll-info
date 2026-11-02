@@ -4,7 +4,7 @@ import { Plus, Minus, Maximize2, Minimize2, LocateFixed, Pencil, X } from 'lucid
 import type { Person, Island, PersonCategory } from '../types';
 import { useStore, touchRecord } from '../state/store';
 import {
-  displayCategories, shortLabel, displayName, personChainRank, categoryColor, currentIslandId, livesAway,
+  displayCategories, shortLabel, displayName, personChainRank, categoryColor, currentIslandId, livesAway, flowDir, flowIsSet,
 } from '../lib/personDisplay';
 import Modal from './Modal';
 import Badge from './Badge';
@@ -41,6 +41,14 @@ function countPair(m: Map<string, PairLink>, ia: string, ib: string, fromIsland?
 interface Marker { iid: string; x: number; y: number; count: number; dealers: number; users: number; exact: boolean }
 interface Edge { a: string; b: string; from?: string; to?: string; color: string; cross: boolean }
 interface View { x: number; y: number; k: number }
+
+/** Filled arrowhead with its tip at the point t (0..1) along x1,y1 -> x2,y2; s = half-width. */
+function arrowHead(x1: number, y1: number, x2: number, y2: number, s: number, t = 1): string {
+  const dx = x2 - x1, dy = y2 - y1, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l;
+  const tx = x1 + dx * t, ty = y1 + dy * t;
+  const bx = tx - ux * s * 1.8, by = ty - uy * s * 1.8;
+  return `M${tx} ${ty}L${bx - uy * s} ${by + ux * s}L${bx + uy * s} ${by - ux * s}Z`;
+}
 
 const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: string; onOpenIsland?: (id: string) => void }> = ({ persons, islands, islandId, onOpenIsland }) => {
   const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 });
@@ -123,9 +131,8 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
         seenP.add(key);
         const ia = currentIslandId(p), ib = currentIslandId(t);
         if (ia === ib) return;
-        const rp = personChainRank(p), rt = personChainRank(t);
-        const from = rp !== null && rt !== null && rp !== rt ? (rp < rt ? ia : ib) : undefined;
-        countPair(pmap, ia, ib, from);
+        const fd = flowDir(p, t);
+        countPair(pmap, ia, ib, fd === 'pt' ? ia : fd === 'tp' ? ib : undefined);
       }));
       mapPairs.push(...pmap.values());
     } else {
@@ -195,12 +202,13 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
       const key = [p.id, tid].sort().join('|');
       if (seen.has(key)) return;
       seen.add(key);
-      const ra = personChainRank(p), rb = personChainRank(t.p);
+      const fd = flowDir(p, t.p);
       let from: string | undefined, to: string | undefined, color = '#8a8f98';
-      if (ra !== null && rb !== null && ra !== rb) {
-        const aUp = ra < rb;
-        from = aUp ? p.id : tid; to = aUp ? tid : p.id;
-        color = Math.min(ra, rb) === 0 ? RED : ORANGE;
+      if (fd) {
+        from = fd === 'pt' ? p.id : tid; to = fd === 'pt' ? tid : p.id;
+        // red when the supplier is a Dealer, orange for street dealers / carriers
+        const supplier = fd === 'pt' ? p : t.p;
+        color = displayCategories(supplier).includes('Dealer') ? RED : ORANGE;
       }
       es.push({ a: p.id, b: tid, from, to, color, cross: currentIslandId(p) !== currentIslandId(t.p) });
     }));
@@ -326,6 +334,24 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
   };
 
   const sel = selected ? nodeMap.get(selected)?.p ?? null : null;
+  const { upsert } = useStore();
+  /** Save a supply direction between two people: 'ab' = a supplies b, 'ba', or null (clear, back to guessing). */
+  const setFlow = async (a: Person, b: Person, dir: 'ab' | 'ba' | null) => {
+    const fresh = (p: Person) => persons.find((x) => x.id === p.id) ?? p;
+    const A = fresh(a), B = fresh(b);
+    const as = (A.supplies ?? []).filter((x) => x !== B.id);
+    const bs = (B.supplies ?? []).filter((x) => x !== A.id);
+    if (dir === 'ab') as.push(B.id);
+    if (dir === 'ba') bs.push(A.id);
+    await upsert('persons', touchRecord({ ...A, supplies: as }));
+    await upsert('persons', touchRecord({ ...B, supplies: bs }));
+  };
+  // Arrow tap: shown direction -> reversed -> cleared (guess) -> ...
+  const cycleFlow = (up: Person, down: Person, directed: boolean, set: boolean) => {
+    if (!directed) return setFlow(up, down, 'ab');   // no direction yet: up supplies down
+    if (!set) return setFlow(up, down, 'ab');        // confirm the guessed direction
+    return setFlow(up, down, 'ba').then(() => undefined); // reverse
+  };
   const linkShown = (e: Edge) => (linkFilter === 'same' ? !e.cross : linkFilter === 'other' ? e.cross : true);
   // All-islands Network view: links between islands are bundled into one line per island pair,
   // except the tapped person's own links, which are drawn person to person.
@@ -408,8 +434,13 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
                   <line key={gi} x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2} stroke={PURPLE} strokeLinecap="round"
                     strokeWidth={(isSelL ? 2.8 : 1.6 + Math.min(g.count, 5) * 0.35) * u}
                     strokeDasharray={`${5 * u} ${3 * u}`} className={g.dir ? 'flow' : undefined}
-                    style={{ ['--dash' as string]: `${-8 * u}` }}
-                    markerEnd={g.dir ? 'url(#arrow-purple)' : undefined} />
+                    style={{ ['--dash' as string]: `${-8 * u}` }} />
+                ))}
+                {segs.map((g, gi) => g.dir && (
+                  <g key={'h' + gi} fill={PURPLE} stroke="#fff" strokeWidth={0.8 * u} strokeLinejoin="round">
+                    <path d={arrowHead(g.x1, g.y1, g.x2, g.y2, 7 * u)} />
+                    <path d={arrowHead(g.x1, g.y1, g.x2, g.y2, 6 * u, 0.62)} />
+                  </g>
                 ))}
               </g>
             );
@@ -444,8 +475,13 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
                   <g key={gi}>
                     <line x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2} stroke={PURPLE} strokeLinecap="round"
                       strokeWidth={isSelL ? 3 : 1.6 + Math.min(g.count, 5) * 0.35} strokeDasharray="5 3"
-                      className={g.dir ? 'flow' : undefined} style={{ ['--dash' as string]: '-8' }}
-                      markerEnd={g.dir ? 'url(#arrow-purple)' : undefined} />
+                      className={g.dir ? 'flow' : undefined} style={{ ['--dash' as string]: '-8' }} />
+                    {g.dir && (
+                      <g fill={PURPLE} stroke="#fff" strokeWidth={0.8} strokeLinejoin="round">
+                        <path d={arrowHead(g.x1, g.y1, g.x2, g.y2, 6.5)} />
+                        <path d={arrowHead(g.x1, g.y1, g.x2, g.y2, 5.5, 0.72)} />
+                      </g>
+                    )}
                     <circle cx={g.mx} cy={g.my} r={6.5} fill={PURPLE} />
                     <text x={g.mx} y={g.my + 3} textAnchor="middle" fontSize={8.5} fontWeight={700} fill="#fff">{g.count}</text>
                   </g>
@@ -475,7 +511,17 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
                 strokeDasharray={e.cross || !e.from ? (isMap ? `${4 / view.k} ${2 / view.k}` : '6 3') : undefined}
                 className={e.cross && e.from ? 'flow' : undefined} style={{ ['--dash' as string]: '-9' }}
                 opacity={faded ? 0.12 : 0.9}
-                markerEnd={e.from ? (e.cross ? 'url(#arrow-purple)' : e.color === RED ? 'url(#arrow-red)' : 'url(#arrow-orange)') : undefined} />
+                />
+              {e.from && (() => {
+                const hs = isMap ? 6 / view.k : 6 / Math.sqrt(view.k);
+                const col = e.cross ? PURPLE : e.color;
+                return (
+                  <g fill={col} opacity={faded ? 0.12 : 1} stroke="var(--card)" strokeWidth={hs * 0.15} strokeLinejoin="round">
+                    <path d={arrowHead(A.x, A.y, x2, y2, hs)} />
+                    {Math.hypot(x2 - A.x, y2 - A.y) > hs * 9 && <path d={arrowHead(A.x, A.y, x2, y2, hs * 0.8, 0.55)} />}
+                  </g>
+                );
+              })()}
               </g>
             );
           })}
@@ -616,14 +662,14 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
       {selLink && (() => {
         const byId = new Map(persons.map((p) => [p.id, p]));
         // every person-to-person link for this line, upstream person first
-        const rows: { up: Person; down: Person; directed: boolean }[] = [];
+        const rows: { up: Person; down: Person; directed: boolean; set: boolean }[] = [];
         const seenK = new Set<string>();
         const add = (p: Person, t: Person) => {
           const key = [p.id, t.id].sort().join('|');
           if (seenK.has(key)) return; seenK.add(key);
-          const rp = personChainRank(p), rt = personChainRank(t);
-          const directed = rp !== null && rt !== null && rp !== rt;
-          rows.push(directed && rt! < rp! ? { up: t, down: p, directed } : { up: p, down: t, directed });
+          const fd = flowDir(p, t);
+          const set = flowIsSet(p, t);
+          rows.push(fd === 'tp' ? { up: t, down: p, directed: true, set } : { up: p, down: t, directed: fd === 'pt', set });
         };
         if (selLink.kind === 'edge') {
           const p = byId.get(selLink.a), t = byId.get(selLink.b);
@@ -658,12 +704,18 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
               )}
               <button className="icon-btn" aria-label="Close" onClick={() => setSelLink(null)}><X size={16} /></button>
             </div>
+            <div className="link-hint">Tap the arrow to set who supplies whom.</div>
             <div className="link-rows">
               {rows.map((r) => (
                 <div key={r.up.id + r.down.id} className="link-row">
                   {who(r.up)}
-                  <span className="lr-arrow" title={r.directed ? 'supplies' : 'linked'}>{r.directed ? '→' : '—'}</span>
+                  <button type="button" className={`lr-arrow ${r.set ? 'set' : ''}`} aria-label="Change direction"
+                    onClick={() => cycleFlow(r.up, r.down, r.directed, r.set)}>
+                    {r.directed ? '→' : '—'}
+                    <small>{r.set ? 'set' : r.directed ? 'guess' : 'tap'}</small>
+                  </button>
                   {who(r.down)}
+                  {r.set && <button type="button" className="lr-clear" aria-label="Clear direction" onClick={() => setFlow(r.up, r.down, null)}>auto</button>}
                 </div>
               ))}
             </div>
@@ -742,6 +794,15 @@ const EditNetwork: React.FC<{ person: Person; persons: Person[]; islands: Island
   });
   const [q, setQ] = useState('');
   const byId = useMemo(() => new Map(persons.map((p) => [p.id, p])), [persons]);
+  // Supply direction per connection: out = this person supplies them, in = they supply this person
+  const [dirs, setDirs] = useState<Record<string, 'out' | 'in' | 'auto'>>(() => {
+    const d: Record<string, 'out' | 'in' | 'auto'> = {};
+    persons.forEach((o) => {
+      if ((person.supplies ?? []).includes(o.id)) d[o.id] = 'out';
+      else if ((o.supplies ?? []).includes(person.id)) d[o.id] = 'in';
+    });
+    return d;
+  });
   const islandName = (id: string) => islands.find((i) => i.id === id)?.name ?? '';
   const toggleCat = (c: PersonCategory) => setCats((cs) => (cs.includes(c) ? cs.filter((x) => x !== c) : [...cs, c]));
 
@@ -754,13 +815,19 @@ const EditNetwork: React.FC<{ person: Person; persons: Person[]; islands: Island
     .slice(0, 30);
 
   const save = async () => {
-    await upsert('persons', touchRecord({ ...person, categories: cats, linkedPersonIds: links } as Person));
-    // keep links two-way: removed connections are also removed on the other side
+    const supplies = links.filter((id) => dirs[id] === 'out');
+    await upsert('persons', touchRecord({ ...person, categories: cats, linkedPersonIds: links, supplies } as Person));
+    // keep links two-way (removed connections go on both sides) and keep the other side's supply list in step
     for (const o of persons) {
       if (o.id === person.id) continue;
       const ol = o.linkedPersonIds ?? [];
-      if (!links.includes(o.id) && ol.includes(person.id)) {
-        await upsert('persons', touchRecord({ ...o, linkedPersonIds: ol.filter((x) => x !== person.id) } as Person));
+      const os = o.supplies ?? [];
+      const linked = links.includes(o.id);
+      const nextL = !linked && ol.includes(person.id) ? ol.filter((x) => x !== person.id) : ol;
+      const wantIn = linked && dirs[o.id] === 'in';
+      const nextS = wantIn ? (os.includes(person.id) ? os : [...os, person.id]) : os.filter((x) => x !== person.id);
+      if (nextL !== ol || nextS.length !== os.length) {
+        await upsert('persons', touchRecord({ ...o, linkedPersonIds: nextL, supplies: nextS } as Person));
       }
     }
     onClose();
@@ -788,6 +855,12 @@ const EditNetwork: React.FC<{ person: Person; persons: Person[]; islands: Island
               <div className="net-row-main">
                 <div className="net-row-name">{displayName(o)}</div>
                 <div className="net-row-sub">{islandName(o.islandId)} · {displayCategories(o).join(', ') || '—'}</div>
+              </div>
+              <div className="dir-seg" role="radiogroup" aria-label="Who supplies whom">
+                {([['out', 'Supplies'], ['in', 'Gets from'], ['auto', 'Auto']] as const).map(([v, label]) => (
+                  <button key={v} type="button" role="radio" aria-checked={(dirs[id] ?? 'auto') === v}
+                    className={(dirs[id] ?? 'auto') === v ? 'on' : ''} onClick={() => setDirs((d) => ({ ...d, [id]: v }))}>{label}</button>
+                ))}
               </div>
               <button type="button" className="net-mini net-mini-danger" aria-label="Remove connection"
                 onClick={() => setLinks((l) => l.filter((x) => x !== id))}><X size={16} /></button>

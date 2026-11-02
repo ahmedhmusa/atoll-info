@@ -36,6 +36,7 @@ export interface Person extends AuditFields {
   drugTypes: DrugType[]; // multi-select
   networkConnections?: string; // free text — known associates/supply chain links, incl. those not tracked as Person records
   linkedPersonIds?: string[]; // structured connections to other Person records — powers the Dashboard network view
+  supplies?: string[]; // ids of linked people this person supplies drugs to (sets arrow direction)
   notes?: string;
   flagStatus: FlagStatus;
   photoDataUrl?: string; // full/reference photo
