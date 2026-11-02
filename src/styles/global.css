@@ -29,6 +29,9 @@
 
   --map-land: #c8d4e6;
   --map-edge: #9fb1cc;
+  --map-lagoon: #dfe9f5;
+  --map-reef: #5ec8e6;
+  --map-island: #2f9e44;
   --wall-1: rgba(0, 122, 255, 0.16);
   --wall-2: rgba(52, 199, 89, 0.12);
   --wall-3: rgba(175, 82, 222, 0.12);
@@ -69,6 +72,9 @@
 
     --map-land: #34425a;
     --map-edge: #4b5d7c;
+    --map-lagoon: #1d3550;
+    --map-reef: #2bb3d9;
+    --map-island: #3ccf62;
     --wall-1: rgba(10, 132, 255, 0.22);
     --wall-2: rgba(48, 209, 88, 0.10);
     --wall-3: rgba(191, 90, 242, 0.16);
@@ -403,6 +409,10 @@ button:disabled { opacity: 0.45; }
 .net-mode button { border: none; background: none; padding: 7px 13px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--text-dim); }
 .net-mode button.on { background: var(--accent); color: #fff; }
 .net-full .net-mode { top: calc(10px + env(safe-area-inset-top, 0px)); }
+.map-label { position: absolute; white-space: nowrap; transform: translateY(-50%); font-size: 11px; font-weight: 600; color: var(--text-dim); text-shadow: 0 0 3px var(--bg); }
+.map-label.left { transform: translate(-100%, -50%); }
+.map-label.island { font-size: 11.5px; font-style: italic; color: var(--text); opacity: 0.8; }
+.map-label.none { transform: translate(-50%, -50%); color: var(--warn); }
 .net-ctrl { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 8px; }
 .net-ctrl .icon-btn { width: 40px; min-width: 40px; height: 40px; padding: 0; }
 .net-sheet {

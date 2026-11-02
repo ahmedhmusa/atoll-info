@@ -8,13 +8,13 @@ import {
 } from '../lib/personDisplay';
 import Modal from './Modal';
 import Badge from './Badge';
-import { MAP_PATHS, MAP_W, MAP_H, ATOLLS, ATOLL_ANCHORS, islandAtoll } from '../lib/maldivesMap';
+import { MAP_PATHS, MAP_W, MAP_H, ATOLLS, ATOLL_ANCHORS, islandAtoll, islandPoint, THAA_LAGOON, THAA_REEFS, THAA_ISLANDS } from '../lib/maldivesMap';
 
 const W = 360;
 const H = 360;
 const MIN_K = 0.6;
 const MAX_K_NET = 6;
-const MAX_K_MAP = 40;
+const MAX_K_MAP = 140;
 // Map view: the whole country fits the 360-unit canvas height
 const MS = (H - 20) / MAP_H;
 const MX0 = W / 2 - (MAP_W * MS) / 2 - 20;
@@ -79,7 +79,20 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
       });
       byAtoll.forEach((isles, atoll) => {
         const [ax, ay] = atoll === '_none' ? [MAP_W + 70, 480] : ATOLL_ANCHORS[atoll as keyof typeof ATOLL_ANCHORS];
-        const list = [...isles.entries()];
+        const all = [...isles.entries()];
+        // Islands with a known position (Thaa) sit exactly there; others share a ring around the atoll point
+        const exact = all.filter(([iid]) => islandPoint(islandById.get(iid)));
+        const list = all.filter(([iid]) => !islandPoint(islandById.get(iid)));
+        exact.forEach(([iid, ppl]) => {
+          const [ix, iy] = islandPoint(islandById.get(iid))!;
+          const sorted = [...ppl].sort(rankSort);
+          const pr = sorted.length > 1 ? Math.max(1.1, sorted.length * 0.5) : 0;
+          sorted.forEach((p, k) => {
+            const b = (k / sorted.length) * Math.PI * 2 - Math.PI / 2;
+            const w = toWorld(ix + Math.cos(b) * pr, iy + Math.sin(b) * pr);
+            out.push({ p, x: w.x, y: w.y, outside: false });
+          });
+        });
         const ringR = list.length > 1 ? 8 + list.length * 3 : 0;
         list.forEach(([, ppl], ii) => {
           const a = (ii / list.length) * Math.PI * 2 - Math.PI / 2;
@@ -154,7 +167,8 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
       if (here.length) {
         const cx = here.reduce((t, n) => t + n.x, 0) / here.length;
         const cy = here.reduce((t, n) => t + n.y, 0) / here.length;
-        const k = 20;
+        // islands with an exact position (Thaa) are tiny on the country map, so zoom further
+        const k = islandPoint(islands.find((i) => i.id === islandId)) ? 55 : 20;
         return { k, x: W / 2 - cx * k, y: H / 2 - cy * k };
       }
       const isl = islands.find((i) => i.id === islandId);
@@ -241,7 +255,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
   const focusSelected = () => {
     const n = selected ? nodeMap.get(selected) : null;
     if (!n) return;
-    const k = isMap ? Math.max(view.k, 16) : 2.2;
+    const k = isMap ? Math.max(view.k, 60) : 2.2;
     setView({ k, x: W / 2 - n.x * k, y: H / 2 - n.y * k });
   };
 
@@ -270,22 +284,13 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
             <g style={{ pointerEvents: 'none' }}>
               <g transform={`translate(${MX0} ${MY0}) scale(${MS})`}>
                 {MAP_PATHS.map((d, i) => <path key={i} d={d} fill="var(--map-land)" stroke="var(--map-edge)" strokeWidth={1.2 / view.k / MS * 0.5} />)}
+                {/* Thaa Atoll in detail: lagoon, reef rim, inhabited islands */}
+                <path d={THAA_LAGOON} fill="var(--map-lagoon)" />
+                {THAA_REEFS.map((d, i) => <path key={'r' + i} d={d} fill="var(--map-reef)" />)}
+                {Object.entries(THAA_ISLANDS).map(([n, [x, y]]) => (
+                  <circle key={n} cx={x} cy={y} r={Math.max(0.18, 2.2 / view.k / MS)} fill="var(--map-island)" />
+                ))}
               </g>
-              {ATOLLS.map((a) => {
-                const w = toWorld(...ATOLL_ANCHORS[a.code]);
-                const left = ATOLL_ANCHORS[a.code][0] < MAP_W * 0.55;
-                const fs = 9 / view.k; // constant on-screen size
-                return (
-                  <text key={a.code} x={w.x + (left ? -1 : 1) * (14 * MS + 8 / view.k)} y={w.y + fs * 0.35} fontSize={fs}
-                    textAnchor={left ? 'end' : 'start'} fill="var(--text-dim)" fontWeight={600}>
-                    {view.k > 3 ? a.name : a.code}
-                  </text>
-                );
-              })}
-              {nodes.some((n) => islandAtoll(islands.find((i) => i.id === currentIslandId(n.p))) === undefined) && (() => {
-                const w = toWorld(MAP_W + 70, 455);
-                return <text x={w.x} y={w.y} fontSize={9 / view.k} textAnchor="middle" fill="var(--warn)" fontWeight={600}>Atoll not set</text>;
-              })()}
             </g>
           )}
           {edges.map((e, i) => {
@@ -347,6 +352,39 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
       {/* Names are normal HTML text (same rendering as the Persons list) so
           Dhivehi right-to-left script displays correctly on iPhone. */}
       <div className="net-labels" aria-hidden="true">
+        {isMap && (() => {
+          // Map labels as HTML too: tiny SVG text scaled up renders distorted on phones
+          const sc = Math.min(box.w, box.h) / W;
+          const ox = (box.w - W * sc) / 2, oy = (box.h - H * sc) / 2;
+          const at = (wx: number, wy: number) => ({ x: ox + (view.x + wx * view.k) * sc, y: oy + (view.y + wy * view.k) * sc });
+          const inView = (q: { x: number; y: number }) => q.x > -120 && q.x < box.w + 120 && q.y > -20 && q.y < box.h + 20;
+          const out: React.ReactNode[] = [];
+          ATOLLS.forEach((a) => {
+            const left = ATOLL_ANCHORS[a.code][0] < MAP_W * 0.55;
+            const w = toWorld(...ATOLL_ANCHORS[a.code]);
+            const q = at(w.x + (left ? -1 : 1) * 14 * MS, w.y);
+            if (a.code === 'Th' && view.k > 5) return; // Thaa shows island names instead
+            if (inView(q)) out.push(
+              <div key={'a' + a.code} className={`map-label atoll ${left ? 'left' : ''}`} style={{ left: q.x + (left ? -6 : 6), top: q.y }}>
+                {view.k > 3 ? a.name : a.code}
+              </div>,
+            );
+          });
+          if (view.k > 5) Object.entries(THAA_ISLANDS).forEach(([n, [mx, my]]) => {
+            const left = mx < ATOLL_ANCHORS.Th[0];
+            const w = toWorld(mx, my);
+            const q = at(w.x, w.y);
+            if (inView(q)) out.push(
+              <div key={'i' + n} className={`map-label island ${left ? 'left' : ''}`} style={{ left: q.x + (left ? -7 : 7), top: q.y - 9 }}>{n}</div>,
+            );
+          });
+          if (nodes.some((n) => islandAtoll(islands.find((i) => i.id === currentIslandId(n.p))) === undefined)) {
+            const w = toWorld(MAP_W + 70, 455);
+            const q = at(w.x, w.y);
+            if (inView(q)) out.push(<div key="none" className="map-label none" style={{ left: q.x, top: q.y }}>Atoll not set</div>);
+          }
+          return out;
+        })()}
         {(() => {
           const sc = Math.min(box.w, box.h) / W;
           const ox = (box.w - W * sc) / 2, oy = (box.h - H * sc) / 2;
