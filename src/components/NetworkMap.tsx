@@ -383,7 +383,11 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
     if (wasTap && e.type === 'pointerup') {
       const el = document.elementFromPoint(e.clientX, e.clientY);
       const isle = el?.closest('[data-iid]');
-      if (isle) { setSelIsland(isle.getAttribute('data-iid')); setSelected(null); setSelLink(null); return; }
+      if (isle) {
+        const iid = isle.getAttribute('data-iid')!;
+        if (!isMap && onOpenIsland) { onOpenIsland(iid); return; } // Network view: open that island's network
+        setSelIsland(iid); setSelected(null); setSelLink(null); return;
+      }
       const hit = el?.closest('[data-pid]');
       if (hit) { setSelected(hit.getAttribute('data-pid')); setSelIsland(null); setSelLink(null); return; }
       const link = el?.closest('[data-link]');
@@ -530,7 +534,9 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
           })}
           {!isMap && bubbles.map((b) => (
             <circle key={'b' + b.iid} cx={b.x} cy={b.y} r={b.r} fill="var(--bubble)" stroke={b.main ? 'var(--accent)' : 'var(--bubble-edge)'}
-              strokeWidth={b.main ? 1.6 : 1} style={{ pointerEvents: 'none' }} />
+              strokeWidth={b.main ? 1.6 : 1}
+              // tapping an island circle opens that island's network (not the chosen island itself)
+              data-iid={b.main ? undefined : b.iid} style={{ pointerEvents: b.main ? 'none' : 'auto', cursor: 'pointer' }} />
           ))}
           {bundled && linkFilter !== 'same' && pairs.map((pl) => {
             const A = bubbleOf.get(pl.a), B = bubbleOf.get(pl.b);
@@ -574,7 +580,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
             const isSelE = selLink?.kind === 'edge' && [selLink.a, selLink.b].sort().join('|') === [e.a, e.b].sort().join('|');
             const faded = (!!selected && !hot) || (!!selLink && !isSelE);
             return (
-              <g key={i} data-link={`edge|${e.a}|${e.b}`} style={{ cursor: 'pointer' }}>
+              <g key={i} data-link={`edge|${e.a}|${e.b}`} style={{ cursor: 'pointer', pointerEvents: bundled && !e.cross ? 'none' : 'auto' }}>
               <line x1={A.x} y1={A.y} x2={x2} y2={y2} stroke="transparent" strokeWidth={isMap ? 14 / view.k : 14 / Math.sqrt(view.k)} />
               <line x1={A.x} y1={A.y} x2={x2} y2={y2} stroke={e.cross ? PURPLE : e.color}
                 strokeWidth={isMap ? (hot || isSelE ? 2 : 1.1) / view.k : (hot || isSelE ? 3.4 : 1.8) / Math.sqrt(view.k)}
@@ -601,7 +607,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
             const u = isMap ? 1 / view.k : 1; // ring and outline thickness
             const isSel = p.id === selected;
             return (
-              <g key={p.id} data-pid={p.id} opacity={dim(p.id) ? 0.2 : 1} style={{ cursor: 'pointer' }}>
+              <g key={p.id} data-pid={p.id} opacity={dim(p.id) ? 0.2 : 1} style={{ cursor: 'pointer', pointerEvents: bundled || (!isMap && islandId && currentIslandId(p) !== islandId) ? 'none' : 'auto' }}>
                 <circle cx={x} cy={y} r={R + 8 * u} fill="transparent" />
                 {outside && <circle cx={x} cy={y} r={R + 3 * u} fill="none" stroke={ORANGE} strokeDasharray={`${3 * u} ${2 * u}`} strokeWidth={1.5 * u} />}
                 {!outside && livesAway(p) && <circle cx={x} cy={y} r={R + 3 * u} fill="none" stroke="var(--ok)" strokeWidth={1.8 * u} />}
@@ -841,7 +847,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
         ))}
       </div>
       <div className="field-hint" style={{ marginTop: 6 }}>
-        Pinch or use +/− to zoom, drag to move. Tap a person to highlight their connections, then Edit. {isMap ? 'Each marker is an island (number = people living there now; red = has dealers). Purple lines join islands whose people are linked. Tap an island, then Open network to see its people. Set each island\'s atoll in the Islands tab.' : 'Each circle is an island. Lines inside a circle link people on the same island; purple lines link people on different islands (the number is how many links). Tap a person to see their own links. Green ring: moved here from another island.'}
+        Pinch or use +/− to zoom, drag to move. {isMap ? 'Each marker is an island (number = people living there now; red = has dealers). Purple lines join islands whose people are linked. Tap an island, then Open network to see its people. Set each island\'s atoll in the Islands tab.' : (islandId ? 'Tap a person to see their links and edit. Tap a smaller circle to open that island. ' : 'Tap an island circle to open its network. ') + 'Lines inside a circle link people on the same island; purple arrows link people on different islands (number = links). Green ring: moved here from another island.'}
       </div>
       {editing && sel && (
         <EditNetwork person={sel} persons={persons} islands={islands} onClose={() => setEditing(false)} />
