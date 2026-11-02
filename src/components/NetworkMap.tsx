@@ -8,11 +8,18 @@ import {
 } from '../lib/personDisplay';
 import Modal from './Modal';
 import Badge from './Badge';
+import { MAP_PATHS, MAP_W, MAP_H, ATOLLS, ATOLL_ANCHORS, islandAtoll } from '../lib/maldivesMap';
 
 const W = 360;
 const H = 360;
 const MIN_K = 0.6;
-const MAX_K = 6;
+const MAX_K_NET = 6;
+const MAX_K_MAP = 40;
+// Map view: the whole country fits the 360-unit canvas height
+const MS = (H - 20) / MAP_H;
+const MX0 = W / 2 - (MAP_W * MS) / 2 - 20;
+const MY0 = 10;
+const toWorld = (mx: number, my: number) => ({ x: MX0 + mx * MS, y: MY0 + my * MS });
 const ALL_CATEGORIES: PersonCategory[] = ['Dealer', 'Street Dealer', 'Carrier', 'Drug User', 'Theft', 'Person of Interest'];
 const RED = '#e0362e';
 const ORANGE = '#e0a53d';
@@ -26,6 +33,11 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [full, setFull] = useState(false);
+  const [mode, setMode] = useState<'network' | 'map'>('network');
+  const isMap = mode === 'map';
+  const MAX_K = isMap ? MAX_K_MAP : MAX_K_NET;
+  // Dot size: fixed in Network view; constant on-screen size in Map view so zooming spreads people apart
+  const nodeR = isMap ? 4.6 / view.k : 11;
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [box, setBox] = useState({ w: W, h: H });
   useEffect(() => {
@@ -53,7 +65,35 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
         out.push({ p, x: cx + Math.cos(ang) * r, y: cy + Math.sin(ang) * r, outside });
       });
     };
-    if (islandId) {
+    if (isMap) {
+      // Group by atoll -> island (present island), place around the atoll's point on the map
+      const islandById = new Map(islands.map((i) => [i.id, i]));
+      const byAtoll = new Map<string, Map<string, Person[]>>();
+      persons.forEach((p) => {
+        const iid = currentIslandId(p);
+        const atoll = islandAtoll(islandById.get(iid)) ?? '_none';
+        if (!byAtoll.has(atoll)) byAtoll.set(atoll, new Map());
+        const m = byAtoll.get(atoll)!;
+        if (!m.has(iid)) m.set(iid, []);
+        m.get(iid)!.push(p);
+      });
+      byAtoll.forEach((isles, atoll) => {
+        const [ax, ay] = atoll === '_none' ? [MAP_W + 70, 480] : ATOLL_ANCHORS[atoll as keyof typeof ATOLL_ANCHORS];
+        const list = [...isles.entries()];
+        const ringR = list.length > 1 ? 8 + list.length * 3 : 0;
+        list.forEach(([, ppl], ii) => {
+          const a = (ii / list.length) * Math.PI * 2 - Math.PI / 2;
+          const ix = ax + Math.cos(a) * ringR, iy = ay + Math.sin(a) * ringR;
+          const sorted = [...ppl].sort(rankSort);
+          const pr = sorted.length > 1 ? Math.max(3, sorted.length * 1.4) : 0;
+          sorted.forEach((p, k) => {
+            const b = (k / sorted.length) * Math.PI * 2 - Math.PI / 2;
+            const w = toWorld(ix + Math.cos(b) * pr, iy + Math.sin(b) * pr);
+            out.push({ p, x: w.x, y: w.y, outside: false });
+          });
+        });
+      });
+    } else if (islandId) {
       // Main ring: everyone living on this island now (incl. people who moved here)
       const here = persons.filter((p) => currentIslandId(p) === islandId).sort(rankSort);
       ring(here, W / 2, H / 2, here.length > 1 ? Math.min(Math.max(60, (here.length * 38) / (Math.PI * 2)), 120) : 0);
@@ -96,7 +136,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
       es.push({ a: p.id, b: tid, from, to, color, cross: currentIslandId(p) !== currentIslandId(t.p) });
     }));
     return { nodes: out, edges: es };
-  }, [persons, islands, islandId]);
+  }, [persons, islands, islandId, isMap]);
 
   const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.p.id, n])), [nodes]);
   const neighbours = useMemo(() => {
@@ -107,7 +147,23 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
   }, [edges, selected]);
 
   useEffect(() => { if (selected && !nodeMap.has(selected)) setSelected(null); }, [nodeMap, selected]);
-  useEffect(() => { setView({ x: 0, y: 0, k: 1 }); setSelected(null); }, [islandId]);
+  // Starting view: in Map view zoom to the chosen island's people, else show everything
+  const homeView = (): View => {
+    if (isMap && islandId) {
+      const here = nodes.filter((n) => currentIslandId(n.p) === islandId);
+      if (here.length) {
+        const cx = here.reduce((t, n) => t + n.x, 0) / here.length;
+        const cy = here.reduce((t, n) => t + n.y, 0) / here.length;
+        const k = 20;
+        return { k, x: W / 2 - cx * k, y: H / 2 - cy * k };
+      }
+      const isl = islands.find((i) => i.id === islandId);
+      const at = islandAtoll(isl);
+      if (at) { const w = toWorld(...ATOLL_ANCHORS[at]); const k = 8; return { k, x: W / 2 - w.x * k, y: H / 2 - w.y * k }; }
+    }
+    return { x: 0, y: 0, k: 1 };
+  };
+  useEffect(() => { setView(homeView()); setSelected(null); }, [islandId, isMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- zoom / pan ----------
   const unit = () => {
@@ -181,11 +237,11 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
     }
   };
 
-  const reset = () => setView({ x: 0, y: 0, k: 1 });
+  const reset = () => setView(homeView());
   const focusSelected = () => {
     const n = selected ? nodeMap.get(selected) : null;
     if (!n) return;
-    const k = 2.2;
+    const k = isMap ? Math.max(view.k, 16) : 2.2;
     setView({ k, x: W / 2 - n.x * k, y: H / 2 - n.y * k });
   };
 
@@ -210,48 +266,71 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
           </marker>
         </defs>
         <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
+          {isMap && (
+            <g style={{ pointerEvents: 'none' }}>
+              <g transform={`translate(${MX0} ${MY0}) scale(${MS})`}>
+                {MAP_PATHS.map((d, i) => <path key={i} d={d} fill="var(--map-land)" stroke="var(--map-edge)" strokeWidth={1.2 / view.k / MS * 0.5} />)}
+              </g>
+              {ATOLLS.map((a) => {
+                const w = toWorld(...ATOLL_ANCHORS[a.code]);
+                const left = ATOLL_ANCHORS[a.code][0] < MAP_W * 0.55;
+                const fs = 9 / view.k; // constant on-screen size
+                return (
+                  <text key={a.code} x={w.x + (left ? -1 : 1) * (14 * MS + 8 / view.k)} y={w.y + fs * 0.35} fontSize={fs}
+                    textAnchor={left ? 'end' : 'start'} fill="var(--text-dim)" fontWeight={600}>
+                    {view.k > 3 ? a.name : a.code}
+                  </text>
+                );
+              })}
+              {nodes.some((n) => islandAtoll(islands.find((i) => i.id === currentIslandId(n.p))) === undefined) && (() => {
+                const w = toWorld(MAP_W + 70, 455);
+                return <text x={w.x} y={w.y} fontSize={9 / view.k} textAnchor="middle" fill="var(--warn)" fontWeight={600}>Atoll not set</text>;
+              })()}
+            </g>
+          )}
           {edges.map((e, i) => {
             const A = nodeMap.get(e.from ?? e.a)!, B = nodeMap.get(e.to ?? e.b)!;
             let x2 = B.x, y2 = B.y;
             if (e.from) {
               const dx = B.x - A.x, dy = B.y - A.y, len = Math.hypot(dx, dy) || 1;
-              x2 = B.x - (dx / len) * 12; y2 = B.y - (dy / len) * 12;
+              x2 = B.x - (dx / len) * (nodeR + 1); y2 = B.y - (dy / len) * (nodeR + 1);
             }
             const hot = !!selected && (e.a === selected || e.b === selected);
             const faded = !!selected && !hot;
             return (
               <line key={i} x1={A.x} y1={A.y} x2={x2} y2={y2} stroke={e.color}
-                strokeWidth={(hot ? 3 : 1.8) / Math.sqrt(view.k)}
-                strokeDasharray={e.cross || !e.from ? '6 3' : undefined}
+                strokeWidth={isMap ? (hot ? 2 : 1.1) / view.k : (hot ? 3 : 1.8) / Math.sqrt(view.k)}
+                strokeDasharray={e.cross || !e.from ? (isMap ? `${4 / view.k} ${2 / view.k}` : '6 3') : undefined}
                 opacity={faded ? 0.12 : 0.9}
                 markerEnd={e.from ? (e.color === RED ? 'url(#arrow-red)' : 'url(#arrow-orange)') : undefined} />
             );
           })}
           {nodes.map(({ p, x, y, outside }) => {
             const cats = displayCategories(p);
-            const R = 11;
+            const R = nodeR;
+            const u = isMap ? 1 / view.k : 1; // ring and outline thickness
             const isSel = p.id === selected;
             return (
               <g key={p.id} data-pid={p.id} opacity={dim(p.id) ? 0.2 : 1} style={{ cursor: 'pointer' }}>
-                <circle cx={x} cy={y} r={R + 8} fill="transparent" />
-                {outside && <circle cx={x} cy={y} r={R + 3} fill="none" stroke={ORANGE} strokeDasharray="3 2" strokeWidth={1.5} />}
-                {!outside && livesAway(p) && <circle cx={x} cy={y} r={R + 3} fill="none" stroke="var(--ok)" strokeWidth={1.8} />}
-                {isSel && <circle cx={x} cy={y} r={R + 5} fill="none" stroke="var(--accent)" strokeWidth={2.5} />}
+                <circle cx={x} cy={y} r={R + 8 * u} fill="transparent" />
+                {outside && <circle cx={x} cy={y} r={R + 3 * u} fill="none" stroke={ORANGE} strokeDasharray={`${3 * u} ${2 * u}`} strokeWidth={1.5 * u} />}
+                {!outside && livesAway(p) && <circle cx={x} cy={y} r={R + 3 * u} fill="none" stroke="var(--ok)" strokeWidth={1.8 * u} />}
+                {isSel && <circle cx={x} cy={y} r={R + 5 * u} fill="none" stroke="var(--accent)" strokeWidth={2.5 * u} />}
                 {cats.length <= 1 ? (
-                  <circle cx={x} cy={y} r={R} fill={cats[0] ? categoryColor(cats[0]) : 'var(--text-dim)'} stroke="var(--card)" strokeWidth={1.5} />
+                  <circle cx={x} cy={y} r={R} fill={cats[0] ? categoryColor(cats[0]) : 'var(--text-dim)'} stroke="var(--card)" strokeWidth={1.5 * u} />
                 ) : cats.map((c, i) => {
                   const a0 = (i / cats.length) * Math.PI * 2 - Math.PI / 2;
                   const a1 = ((i + 1) / cats.length) * Math.PI * 2 - Math.PI / 2;
                   const large = a1 - a0 > Math.PI ? 1 : 0;
                   return (
-                    <path key={c} fill={categoryColor(c)} stroke="var(--card)" strokeWidth={1}
+                    <path key={c} fill={categoryColor(c)} stroke="var(--card)" strokeWidth={u}
                       d={`M${x} ${y} L${x + R * Math.cos(a0)} ${y + R * Math.sin(a0)} A${R} ${R} 0 ${large} 1 ${x + R * Math.cos(a1)} ${y + R * Math.sin(a1)} Z`} />
                   );
                 })}
               </g>
             );
           })}
-          {!islandId && (() => {
+          {!islandId && !isMap && (() => {
             const seenI = new Set<string>();
             return nodes.map(({ p, x, y }) => {
               const ci = currentIslandId(p);
@@ -271,10 +350,12 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
         {(() => {
           const sc = Math.min(box.w, box.h) / W;
           const ox = (box.w - W * sc) / 2, oy = (box.h - H * sc) / 2;
-          const fs = Math.max(12, Math.min(17, 12 * Math.sqrt(view.k) * sc));
+          const fs = isMap ? 12 : Math.max(12, Math.min(17, 12 * Math.sqrt(view.k) * sc));
           return nodes.map(({ p, x, y }) => {
+            // Map view: names appear once zoomed in (always for the selected person and their links)
+            if (isMap && view.k < 7 && p.id !== selected && !neighbours.has(p.id)) return null;
             const sx = ox + (view.x + x * view.k) * sc;
-            const sy = oy + (view.y + y * view.k) * sc + 11 * view.k * sc + 2;
+            const sy = oy + (view.y + y * view.k) * sc + nodeR * view.k * sc + 2;
             if (sx < -60 || sx > box.w + 60 || sy < -20 || sy > box.h + 20) return null;
             return (
               <div key={p.id} dir="auto" className="net-label"
@@ -285,6 +366,11 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
           });
         })()}
       </div>
+      </div>
+
+      <div className="net-mode" role="tablist" aria-label="View">
+        <button role="tab" aria-selected={!isMap} className={!isMap ? 'on' : ''} onClick={() => setMode('network')}>Network</button>
+        <button role="tab" aria-selected={isMap} className={isMap ? 'on' : ''} onClick={() => setMode('map')}>Map</button>
       </div>
 
       <div className="net-ctrl">
@@ -319,7 +405,7 @@ const NetworkMap: React.FC<{ persons: Person[]; islands: Island[]; islandId: str
     <>
       {full ? createPortal(<div className="net-full-overlay">{canvas}</div>, document.body) : canvas}
       <div className="field-hint" style={{ marginTop: 6 }}>
-        Pinch or use +/− to zoom, drag to move. Tap a person to highlight their connections, then Edit. Green ring: moved here from another island. Dashed ring: from another island or living elsewhere now.
+        Pinch or use +/− to zoom, drag to move. Tap a person to highlight their connections, then Edit. {isMap ? 'Map shows everyone on the atoll of their present island — zoom in to see names. Set each island\'s atoll in the Islands tab.' : 'Green ring: moved here from another island. Dashed ring: from another island or living elsewhere now.'}
       </div>
       {editing && sel && (
         <EditNetwork person={sel} persons={persons} islands={islands} onClose={() => setEditing(false)} />

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, ChevronRight, Pencil, Trash2, MapPin } from 'lucide-react';
 import { useStore } from '../state/store';
 import { newId } from '../lib/util';
+import { ATOLLS, atollName, guessAtoll, islandAtoll } from '../lib/maldivesMap';
 import Modal from '../components/Modal';
 import type { Island } from '../types';
 
@@ -37,7 +38,7 @@ const Islands: React.FC = () => {
       {rows.map((r) => (
         <div key={r.island.id} className="list-item" style={{ cursor: 'pointer' }} onClick={() => setSelId(r.island.id)}>
           <div className="li-main">
-            <div className="li-title">{r.island.name}</div>
+            <div className="li-title">{r.island.name}<span style={{ fontWeight: 400, color: 'var(--text-dim)', fontSize: 13 }}> · {atollName(islandAtoll(r.island))}</span></div>
             <div className="li-sub" style={{ display: 'flex', gap: 12, marginTop: 4 }}>
               <span style={{ color: 'var(--danger)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--danger)', display: 'inline-block' }} />
@@ -81,7 +82,7 @@ const Islands: React.FC = () => {
           <div className="kv-row"><span className="k">Reports</span><span className="v">{sel.reports}</span></div>
 
           <div className="btn-row" style={{ marginTop: 16 }}>
-            <button className="btn" onClick={() => { setEditing(sel.island); setSelId(null); }}><Pencil size={14} /> Rename</button>
+            <button className="btn" onClick={() => { setEditing(sel.island); setSelId(null); }}><Pencil size={14} /> Edit</button>
             <button
               className="btn btn-danger"
               onClick={() => { if (confirm(`Delete ${sel.island.name}?`)) { remove('islands', sel.island.id); setSelId(null); } }}
@@ -107,16 +108,27 @@ const Islands: React.FC = () => {
 
 const IslandForm: React.FC<{ existing: Island | null; onClose: () => void; onSave: (isl: Island) => void }> = ({ existing, onClose, onSave }) => {
   const [name, setName] = useState(existing?.name ?? '');
+  const [atoll, setAtoll] = useState<string>(existing?.atoll ?? '');
+  const guessed = guessAtoll(name);
 
   const save = () => {
     if (!name.trim()) return;
-    const record: Island = existing ? { ...existing, name } : { id: newId(), name };
+    const chosen = atoll || guessed || undefined;
+    const record: Island = existing ? { ...existing, name, atoll: chosen } : { id: newId(), name, atoll: chosen };
     onSave(record);
   };
 
   return (
-    <Modal title={existing ? 'Rename Island' : 'New Island'} onClose={onClose}>
+    <Modal title={existing ? 'Edit Island' : 'New Island'} onClose={onClose}>
       <div className="field"><label>Island name *</label><input value={name} onChange={(e) => setName(e.target.value)} /></div>
+      <div className="field">
+        <label>Atoll</label>
+        <select value={atoll} onChange={(e) => setAtoll(e.target.value)}>
+          <option value="">{guessed ? `Automatic: ${atollName(guessed)}` : 'Not set'}</option>
+          {ATOLLS.map((a) => <option key={a.code} value={a.code}>{a.name}</option>)}
+        </select>
+        <div className="field-hint">Places this island on the drug network map.</div>
+      </div>
       <button className="btn btn-primary" onClick={save}>Save Island</button>
     </Modal>
   );

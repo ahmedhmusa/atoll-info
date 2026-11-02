@@ -14,6 +14,7 @@ export interface AuditFields {
 export interface Island {
   id: ID;
   name: string;
+  atoll?: string; // atoll code (see lib/maldivesMap) — places the island on the network map
 }
 
 export type PersonCategory = 'Dealer' | 'Street Dealer' | 'Carrier' | 'Drug User' | 'Theft' | 'Person of Interest';
